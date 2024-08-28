@@ -4,7 +4,7 @@ import inspect
 import numpy as np
 import pandas as pd
 from scipy.sparse.linalg import eigsh
-from scipy.linalg import kron, block_diag  # inv,
+from scipy.linalg import kron, block_diag, pinv, pinvh
 from pysrc.remNaNs_spline import remNaNs_spline
 
 
@@ -216,9 +216,13 @@ def dfm(X, Spec, threshold=1e-5, max_iter=5000):
     y_est = y_est.T
 
     while num_iter < max_iter and not converged:  # Loop until converges or max iter.
-        C_new, R_new, A_new, Q_new, Z_0, V_0, loglik = EMstep(  # Applying EM algorithm
-            y_est, A, C, Q, R, Z_0, V_0, r, p, R_mat, q, nQ, i_idio, blocks
-        )
+        try:
+            C_new, R_new, A_new, Q_new, Z_0, V_0, loglik = EMstep(  # Applying EM algorithm
+                y_est, A, C, Q, R, Z_0, V_0, r, p, R_mat, q, nQ, i_idio, blocks
+            )
+        except FloatingPointError:
+            print("Stopper because of FloatingPointError")
+            break
 
         C, R, A, Q = C_new, R_new, A_new, Q_new
 
@@ -239,7 +243,7 @@ def dfm(X, Spec, threshold=1e-5, max_iter=5000):
         previous_loglik = loglik
         num_iter = num_iter + 1
 
-    if num_iter < max_iter:
+    if num_iter < max_iter and converged:
         print(f"Successful: Convergence at {num_iter} iterations")
     else:
         print("Stopped because maximum iterations reached")
@@ -1702,13 +1706,13 @@ def SKF(Y, A, C, Q, R, Z_0, V_0):
                 iF
             )  # A short-hand for nth root of x: exp(log(x)/n) where x - number, n - degree
 
-            if det == 0:
+            if det <= 0:
                 # If there are precision related issues, replace Zu and Vu with prior
                 Zu = Z
                 Vu = V
             else:
                 S["loglik"] = S["loglik"] + 0.5 * (
-                    cmath.log(det) - innov.T @ iF @ innov
+                    math.log(det) - innov.T @ iF @ innov
                 )
 
         # STORE OUTPUT----------------------------------------------------
@@ -1725,8 +1729,8 @@ def SKF(Y, A, C, Q, R, Z_0, V_0):
     # Store Kalman gain k_t
     if Y_t.size == 0:
         S["k_t"] = np.zeros((m, m))
-
-    S["k_t"] = VCF @ C_t
+    else:
+        S["k_t"] = VCF @ C_t
 
     return S
 
@@ -1856,7 +1860,7 @@ def FIS(A, S):
     S["VmT_1"][:, :, nobs - 1] = (np.eye(m) - S["k_t"]) @ A @ S["VmU"][:, :, nobs - 1]
 
     # Used for recursion process. See companion file for details
-    J_2 = S["VmU"][:, :, nobs - 1] @ A.T @ safe_inv(S["Vm"][:, :, nobs - 1])
+    J_2 = S["VmU"][:, :, nobs - 1] @ A.T @ pinv(S["Vm"][:, :, nobs - 1])
 
     # RUN SMOOTHING ALGORITHM ----------------------------------------------
 
@@ -1882,7 +1886,7 @@ def FIS(A, S):
 
         if t > 0:
             # Update weight
-            J_2 = S["VmU"][:, :, t - 1] @ A.T @ safe_inv(S["Vm"][:, :, t - 1])
+            J_2 = S["VmU"][:, :, t - 1] @ A.T @ pinv(S["Vm"][:, :, t - 1])
 
             # Update lag 1 factor covariance matrix
             S["VmT_1"][:, :, t - 1] = VmU @ J_2.T + J_1 @ (V_T1 - A @ VmU) @ J_2.T
