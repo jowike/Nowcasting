@@ -111,7 +111,7 @@ def read_data(datafile):
         Time (np.ndarray): Observation periods for the time series data
         Mnem (list): Series ID for each variable
     """
-    df = pd.read_excel(datafile, sheet_name='data', header=None)
+    df = pd.read_excel(datafile, sheet_name='data', header=None, engine="openpyxl")
     Mnem = df.iloc[0, 1:].tolist()
 
     # if os.name == 'nt':  # Check if the operating system is Windows
@@ -143,6 +143,7 @@ def sort_data(Z, Mnem, Spec):
 
     # Sort series by ordering of Spec
     N = len(Spec['seriesid'])
+    print(Mnem)
     permutation = [Mnem.index(spec_id) for spec_id in Spec['seriesid']]
 
     Mnem = [Mnem[i] for i in permutation]
