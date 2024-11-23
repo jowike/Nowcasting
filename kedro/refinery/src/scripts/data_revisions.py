@@ -15,7 +15,6 @@ def prepare_real_time_vintage_data(
     ref_date_col,
     pub_date_col,
     series_val_col,
-    freq_desc_col,
 ):
     """
     Prepares an actual real-time dataset for a given reference date, adjusting for data publication schedules.
@@ -34,7 +33,7 @@ def prepare_real_time_vintage_data(
     - pd.DataFrame: A long-format DataFrame containing real-time dataset prepared for the target reference date.
     """
 
-    def _format_individual_series(df, ref_date, max_pub_date, freq_desc):
+    def _format_individual_series(df, ref_date, pub_date_limit):
         """
         This function is structured to process each non-target variable code to create a long format series
         based on available data up to a specified publication date (it extracts the last release dates
@@ -43,14 +42,14 @@ def prepare_real_time_vintage_data(
         Parameters:
         - df (pd.DataFrame): Subset of the dataset containing only non-target series.
         - ref_date (pd.Timestamp): Date for which the data should be evaluated.
-        - max_pub_date (pd.Timestamp): Maximum publication date to consider.
+        - pub_date_limit (pd.Timestamp): Maximum publication date to consider.
 
         Returns:
         - pd.DataFrame: Long-format DataFrame for each non-target series up to the specified publication date.
         - list: List of series codes with missing data (null columns).
         """
         df_long = pd.DataFrame(
-            columns=[series_code_col, ref_date_col, pub_date_col, series_val_col, freq_desc_col]
+            columns=[series_code_col, ref_date_col, pub_date_col, series_val_col]
         )
         null_cols = []
 
@@ -66,7 +65,7 @@ def prepare_real_time_vintage_data(
                         pd.date_range(
                             min(series_pivot.columns),
                             max(series_pivot.columns),
-                            freq=freq_desc,
+                            freq="MS",
                         )
                     ),
                     axis=1,
@@ -74,19 +73,15 @@ def prepare_real_time_vintage_data(
                 .sort_index()
                 .ffill()
             )
-            pivot_limit = series_pivot[series_pivot.index < max_pub_date]
 
-            try:
-                last_release_dt = (
-                    pivot_limit[ref_date]
-                    .dropna(how="all")
-                    .last_valid_index()
-                    .strftime("%Y-%m-%d")
-                )
-            except (KeyError, AttributeError):
-                last_release_dt = None
-                null_cols.append(variable_code)
-                continue
+            pivot_limit = series_pivot[series_pivot.index < pub_date_limit]
+
+            last_release_dt = (
+                pivot_limit[min(max(pivot_limit.dropna(how="all", axis=1).columns), ref_date)]
+                .dropna(how="all")
+                .last_valid_index()
+                .strftime("%Y-%m-%d")
+            )
 
             series = pivot_limit.loc[last_release_dt].to_frame()
             series = series.loc[
@@ -99,7 +94,6 @@ def prepare_real_time_vintage_data(
             series.columns = [series_val_col]
             series[series_code_col] = variable_code
             series[pub_date_col] = last_release_dt
-            series[freq_desc_col] = freq_desc
 
             if series[series_val_col].isnull().any():
                 null_cols.append(variable_code)
@@ -130,18 +124,10 @@ def prepare_real_time_vintage_data(
     y_first_est_release_dt = y_pivot[ref_date].first_valid_index().strftime("%Y-%m-%d")
     X_df = ds[ds[series_code_col] != y_code]
 
-    X_df_m = X_df.loc[X_df['FrequencyDescription'].str.contains(r'(Monthly)')]
-    X_df_q = X_df.loc[X_df['FrequencyDescription'].str.contains(r'(Quarterly)')]
-
     # Call the nested helper function for non-target series
-    cols = [series_code_col, ref_date_col, pub_date_col, series_val_col]
-    X_df_long_m, _ = _format_individual_series(
-        df=X_df_m[cols], ref_date=ref_date, max_pub_date=y_first_est_release_dt, freq_desc="MS"
+    X_df_long, _ = _format_individual_series(
+        df=X_df, ref_date=ref_date, pub_date_limit=y_first_est_release_dt
     )
-    X_df_long_q, _ = _format_individual_series(
-        df=X_df_q[cols], ref_date=ref_date, max_pub_date=y_first_est_release_dt, freq_desc="QS"
-    )
-    X_df_long = pd.concat([X_df_long_m, X_df_long_q])
 
     rt_vintage_dt = y_pivot[y_pivot.index < y_first_est_release_dt].index.max()
     y_series = y_pivot[y_pivot.columns[y_pivot.columns <= ref_date]].loc[rt_vintage_dt]

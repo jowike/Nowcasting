@@ -35,3 +35,32 @@ def lag_to_fill_ragged_edges(df):
                 df[col] = series.shift(shift_amount)
 
     return df
+
+
+def prepare_auto_spec(df):
+    """
+    Load model specification for a dynamic factor model (DFM).
+
+    Parameters:
+    - specfile: str, path to the Excel file containing the model specification.
+
+    Returns:
+    - spec: dict, containing the model specification.
+    """
+    raw_data = df.copy()
+    # Convert all headers to lowercase for consistency
+    raw_data.columns = raw_data.columns.str.lower()
+
+    # Initialize spec dictionary
+    spec = {}
+
+    # Fields to extract from the Excel file
+    field_names = ['seriesid', 'frequency', 'transformation']
+    for field in field_names:
+        if field in raw_data.columns:
+            spec[field] = raw_data[field].tolist()
+        else:
+            raise ValueError(f"{field} column missing from model specification.")
+
+    return spec
+

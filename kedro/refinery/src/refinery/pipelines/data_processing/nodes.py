@@ -1,94 +1,32 @@
-# import pandas as pd
-
-
-# def _is_true(x: pd.Series) -> pd.Series:
-#     return x == "t"
-
-
-# def _parse_percentage(x: pd.Series) -> pd.Series:
-#     x = x.str.replace("%", "")
-#     x = x.astype(float) / 100
-#     return x
-
-
-# def _parse_money(x: pd.Series) -> pd.Series:
-#     x = x.str.replace("$", "").str.replace(",", "")
-#     x = x.astype(float)
-#     return x
-
-
-# def preprocess_companies(companies: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
-#     """Preprocesses the data for companies.
-
-#     Args:
-#         companies: Raw data.
-#     Returns:
-#         Preprocessed data, with `company_rating` converted to a float and
-#         `iata_approved` converted to boolean.
-#     """
-#     companies["iata_approved"] = _is_true(companies["iata_approved"])
-#     companies["company_rating"] = _parse_percentage(companies["company_rating"])
-#     return companies, {"columns": companies.columns.tolist(), "data_type": "companies"}
-
-
-# def preprocess_shuttles(shuttles: pd.DataFrame) -> pd.DataFrame:
-#     """Preprocesses the data for shuttles.
-
-#     Args:
-#         shuttles: Raw data.
-#     Returns:
-#         Preprocessed data, with `price` converted to a float and `d_check_complete`,
-#         `moon_clearance_complete` converted to boolean.
-#     """
-#     shuttles["d_check_complete"] = _is_true(shuttles["d_check_complete"])
-#     shuttles["moon_clearance_complete"] = _is_true(shuttles["moon_clearance_complete"])
-#     shuttles["price"] = _parse_money(shuttles["price"])
-#     return shuttles
-
-
-# def create_model_input_table(
-#     shuttles: pd.DataFrame, companies: pd.DataFrame, reviews: pd.DataFrame
-# ) -> pd.DataFrame:
-#     """Combines all data to create a model input table.
-
-#     Args:
-#         shuttles: Preprocessed data for shuttles.
-#         companies: Preprocessed data for companies.
-#         reviews: Raw data for reviews.
-#     Returns:
-#         Model input table.
-
-#     """
-#     rated_shuttles = shuttles.merge(reviews, left_on="id", right_on="shuttle_id")
-#     rated_shuttles = rated_shuttles.drop("id", axis=1)
-#     model_input_table = rated_shuttles.merge(
-#         companies, left_on="company_id", right_on="id"
-#     )
-#     model_input_table = model_input_table.dropna()
-#     return model_input_table
-
 import sys
 
-sys.path.append(
-    "/Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/src/refinery/pipelines/scripts"
-)
+sys.path.append("/Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/src/scripts")
 
 import pandas as pd
-from typing import List, Literal
+import numpy as np
+from typing import List, Literal, Tuple
+from datetime import datetime
 
-from utils import _convert_to_datetime
-from data_revisions import prepare_real_time_vintage_data
-from load_spec import load_spec
+from scripts.utils import _convert_to_datetime, prepare_auto_spec
+from scripts.data_revisions import prepare_real_time_vintage_data
+from scripts.ragged_edges import shift_to_fill_trailing_nans
+from scripts.load_spec import load_spec
+from scripts.remNaNs_spline import remNaNs_spline
+from scripts.load_data import load_data
+from scripts.summarize import summarize
 
 
 def prepare_vintage_data(
-    ds: pd.DataFrame, parameters: dict, spec_options: dict = None
+    ds: pd.DataFrame,
+    parameters: dict,
+    dataprep_options: dict,
+    spec_options: dict = None,
 ) -> pd.DataFrame:
     """
     This function prepares retrospective dataset (vintage data) based on revision history
     """
     ds = _convert_to_datetime(
-        ds, [parameters["ref_date_col"], parameters["pub_date_col"]]
+        ds, [dataprep_options["ref_date_col"], dataprep_options["pub_date_col"]]
     )
 
     if spec_options:
@@ -100,17 +38,15 @@ def prepare_vintage_data(
             Spec["unitstransformed"],
             Spec["frequency"],
         )
-        df = ds.loc[ds[parameters["series_code_col"]].isin(SeriesID)]
+        df = ds.loc[ds[dataprep_options["series_code_col"]].isin(SeriesID)]
     else:
         df = ds.copy()
 
-    # df = df.loc[df[parameters["freq_desc_col"]].isin(parameters["freq_desc"])][parameters["cols"]]
     cols = [
-        parameters["series_code_col"],
-        parameters["ref_date_col"],
-        parameters["pub_date_col"],
-        parameters["series_val_col"],
-        parameters["freq_desc_col"],
+        dataprep_options["series_code_col"],
+        dataprep_options["ref_date_col"],
+        dataprep_options["pub_date_col"],
+        dataprep_options["series_val_col"],
     ]
     df = df[cols].drop_duplicates()
 
@@ -119,10 +55,107 @@ def prepare_vintage_data(
             ds=df,
             y_code=parameters["y_code"],
             ref_date=parameters["ref_date"],
-            series_code_col=parameters["series_code_col"],
-            ref_date_col=parameters["ref_date_col"],
-            pub_date_col=parameters["pub_date_col"],
-            series_val_col=parameters["series_val_col"],
-            freq_desc_col=parameters["freq_desc_col"],
+            series_code_col=dataprep_options["series_code_col"],
+            ref_date_col=dataprep_options["ref_date_col"],
+            pub_date_col=dataprep_options["pub_date_col"],
+            series_val_col=dataprep_options["series_val_col"],
         )
+    # TODO: preliminary, current-vintage (pseudo-real-time)
     return df_long
+
+
+def prepare_freq_details(ds: pd.DataFrame, parameters: dict) -> pd.DataFrame:
+    """
+    This function prepares retrospective dataset (vintage data) based on revision history
+    """
+    df = ds.copy()
+    df = (
+        df[[parameters["series_code_col"], parameters["freq_desc_col"]]]
+        .drop_duplicates()
+        .rename(columns={parameters["series_code_col"]: "SeriesID"})
+    )
+    df["Frequency"] = df[parameters["freq_desc_col"]].apply(
+        lambda x: "m" if "Monthly" in x else "q" if "Quarterly" in x else None
+    )
+
+    return df[["SeriesID", "Frequency"]]
+
+
+def harmonize_ragged_edges(
+    ds,
+    freq_details,
+    parameters,
+):
+    to_write = pd.DataFrame()
+    for freq_desc in freq_details["Frequency"].unique():
+        series_codes = freq_details.loc[freq_details["Frequency"] == freq_desc][
+            "SeriesID"
+        ]
+        subset = ds.loc[ds[parameters["series_code_col"]].isin(series_codes)]
+        if subset.shape[0]:
+            df_f_pivot = subset.pivot(
+                index=parameters["ref_date_col"],
+                columns=parameters["series_code_col"],
+                values=parameters["series_val_col"],
+            )
+            res_i = shift_to_fill_trailing_nans(df_f_pivot)
+
+            to_write = pd.concat(
+                [to_write, pd.melt(res_i, value_vars=res_i.columns, ignore_index=False)]
+            )
+
+    to_write = to_write.reset_index().pivot(
+        index=parameters["ref_date_col"],
+        columns=parameters["series_code_col"],
+        values="value",
+    )
+    return to_write
+
+
+def transform_time_series(
+    ds: pd.DataFrame,
+    freq_details: pd.DataFrame,
+    parameters: dict,
+    dataprep_options: dict,
+    spec_options: dict = None,
+):
+    if parameters["sample_start"]:
+        sample_start = pd.to_datetime(parameters["sample_start"], format="%Y-%m-%d")
+
+    if spec_options:
+        Spec = load_spec(spec_options["filepath"])
+
+        X, Time, Z, header = load_data(ds, Spec, sample_start)
+
+        # summarize data
+        summarize(X.astype(float), Time, Spec)
+
+        # Prepare data -----------------------------------------------------------
+        Mx = np.nanmean(X, axis=0)
+        Wx = np.nanstd(X, axis=0)
+        xNaN = (X - Mx) / Wx  # Standardize series
+
+        optNaN = {"method": 2, "k": 3}
+        x_est, _, nanLE = remNaNs_spline(xNaN, optNaN)  # Impute series
+
+        summarize(x_est, Time[~nanLE], Spec)
+
+        X_df = pd.DataFrame(
+            x_est, columns=header, index=Time[~nanLE]
+        )  # Transformed, standarized, imputed data
+        Z_df = pd.DataFrame(
+            data=Z, columns=header, index=Time
+        )  # Source data (just in cases)
+    else:
+        spec = freq_details.copy()
+        spec["Transformation"] = dataprep_options["default_transf_code"]
+        Spec = prepare_auto_spec(spec)
+        X, Time, Z, header = load_data(ds, Spec, sample_start)
+
+        print(Spec)
+        # TODO
+
+    return X_df.reset_index(), Z_df.reset_index()
+
+
+# TODO: feature selection, stationarity-based filtering, vif fot the case when spec_options are undefined

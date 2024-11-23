@@ -1,35 +1,11 @@
-# from kedro.pipeline import Pipeline, node, pipeline
-
-# from .nodes import create_model_input_table, preprocess_companies, preprocess_shuttles
-
-
-# def create_pipeline(**kwargs) -> Pipeline:
-#     return pipeline(
-#         [
-#             node(
-#                 func=preprocess_companies,
-#                 inputs="companies",
-#                 outputs=["preprocessed_companies", "companies_columns"],
-#                 name="preprocess_companies_node",
-#             ),
-#             node(
-#                 func=preprocess_shuttles,
-#                 inputs="shuttles",
-#                 outputs="preprocessed_shuttles",
-#                 name="preprocess_shuttles_node",
-#             ),
-#             node(
-#                 func=create_model_input_table,
-#                 inputs=["preprocessed_shuttles", "preprocessed_companies", "reviews"],
-#                 outputs="model_input_table",
-#                 name="create_model_input_table_node",
-#             ),
-#         ]
-#     )
-
 from kedro.pipeline import Pipeline, node, pipeline
 
-from .nodes import prepare_vintage_data
+from .nodes import (
+    prepare_vintage_data,
+    prepare_freq_details,
+    harmonize_ragged_edges,
+    transform_time_series,
+)
 
 
 def create_pipeline(**kwargs) -> Pipeline:
@@ -40,10 +16,45 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs=[
                     "revision_history",
                     "params:vintage_options",
-                    "params:spec_options"
+                    "params:dataprep_options",
+                    # "params:spec_options",
+                ],
+                outputs="vintage_data",
+                name="prepare_vintage_data_node",
+            ),
+            node(
+                func=prepare_freq_details,
+                inputs=[
+                    "revision_history",
+                    "params:dataprep_options",
                     ],
-                outputs="preprocessed_vintages",
-                name="preprocess_vintages_node",
+                outputs="freq_details",
+                name="prepare_freq_details_node",
+            ),
+            node(
+                func=harmonize_ragged_edges,
+                inputs=[
+                    "vintage_data",
+                    "freq_details",
+                    "params:dataprep_options",
+                    ],
+                outputs="harmonized_data",
+                name="harmonize_ragged_edges_node",
+            ),
+            node(
+                func=transform_time_series,
+                inputs=[
+                    "harmonized_data",
+                    "freq_details",
+                    "params:vintage_options",
+                    "params:dataprep_options",
+                    # "params:spec_options"
+                    ],
+                outputs=[
+                    "aligned_transformed_data",
+                    "aligned_non_transformed_data"
+                    ],
+                name="transform_time_series_node",
             ),
         ]
     )

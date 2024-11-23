@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-def summarize(X, Time, Spec, vintage):
+def summarize(X, Time, Spec):
     """
     Summarize and display the detail table for data entering the DFM.
 
@@ -10,7 +10,7 @@ def summarize(X, Time, Spec, vintage):
         into news and impacts for released data series.
     """
     print('\n\n\n')
-    print('Table 2: Data Summary \n')
+    print('Table: Data Summary \n')
 
     T, N = X.shape
     print(f'N = {N:4d} data series')

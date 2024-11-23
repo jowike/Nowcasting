@@ -3,53 +3,8 @@ import numpy as np
 import os
 import warnings
 
-# def load_data(datafile, Spec, sample=None, load_excel=False):
-#     """
-#     Load vintage of data from file and format as structure
 
-#     Parameters:
-#         datafile (str): Filename of Microsoft Excel workbook file
-#         Spec (dict): Model specification containing SeriesID and other info
-#         sample (float, optional): Sample period start date in numeric form
-#         load_excel (bool, optional): Flag to force loading from Excel
-
-#     Returns:
-#         X (np.ndarray): T x N numeric array, transformed dataset
-#         Time (np.ndarray): T x 1 numeric array, date number with observation dates
-#         Z (np.ndarray): T x N numeric array, raw (untransformed) dataset
-#     """
-#     print('Loading data...')
-
-#     ext = os.path.splitext(datafile)[1]  # file extension
-#     idx = datafile.rfind(os.path.sep)
-#     datafile_mat = os.path.join(datafile[:idx], 'mat', os.path.splitext(datafile[idx + 1:])[0] + '.npz')
-
-#     if os.path.exists(datafile_mat) and not load_excel:
-#         # Load raw data from a NumPy formatted binary (.npz) file
-#         with np.load(datafile_mat) as data:
-#             Z = data['Z']
-#             Time = data['Time']
-#             Mnem = data['Mnem']
-#     elif ext in ['.xlsx', '.xls']:
-#         # Read raw data from Excel file
-#         Z, Time, Mnem = read_data(datafile)
-#         np.savez(datafile_mat, Z=Z, Time=Time, Mnem=Mnem)
-#     else:
-#         raise ValueError('Only Microsoft Excel workbook files supported.')
-
-#     # Sort data based on model specification
-#     Z = sort_data(Z, Mnem, Spec)
-    
-#     # Transform data based on model specification
-#     X, Time, Z = transform_data(Z, Time, Spec)
-
-#     # Drop data not in estimation sample
-#     if sample is not None:
-#         X, Time, Z = drop_data(X, Time, Z, sample)
-
-#     return X, Time, Z
-
-def load_data(datafile, Spec, sample=None, load_excel=False):
+def load_data(ds, Spec, sample=None, load_excel=False):
     """
     Load vintage of data from file and format as structure
 
@@ -66,22 +21,7 @@ def load_data(datafile, Spec, sample=None, load_excel=False):
     """
     print('Loading data...')
 
-    ext = os.path.splitext(datafile)[1]  # file extension
-    idx = datafile.rfind(os.path.sep)
-    datafile_mat = os.path.join(datafile[:idx], 'mat', os.path.splitext(datafile[idx + 1:])[0] + '.npz')
-
-    if os.path.exists(datafile_mat) and not load_excel:
-        # Load raw data from a NumPy formatted binary (.npz) file
-        with np.load(datafile_mat, allow_pickle=True) as data:
-            Z = data['Z']
-            Time = data['Time']
-            Mnem = data['Mnem']
-    elif ext in ['.xlsx', '.xls']:
-        # Read raw data from Excel file
-        Z, Time, Mnem = read_data(datafile)
-        # np.savez(datafile_mat, Z=Z, Time=Time, Mnem=Mnem)
-    else:
-        raise ValueError('Only Microsoft Excel workbook files supported.')
+    Z, Time, Mnem = read_data(ds)
 
     # Sort data based on model specification
     Z = sort_data(Z, Mnem, Spec)
@@ -96,10 +36,10 @@ def load_data(datafile, Spec, sample=None, load_excel=False):
     # Z = np.vstack([header, Z])
     # X = np.vstack([header, X])
 
-    return X, Time, Z
+    return X, Time, Z, header
 
 
-def read_data(datafile):
+def read_data(ds):
     """
     Read data from Microsoft Excel workbook file
 
@@ -111,8 +51,8 @@ def read_data(datafile):
         Time (np.ndarray): Observation periods for the time series data
         Mnem (list): Series ID for each variable
     """
-    df = pd.read_excel(datafile, sheet_name='data', header=None, engine="openpyxl")
-    Mnem = df.iloc[0, 1:].tolist()
+    # df = pd.read_excel(datafile, sheet_name='data', header=None, engine="openpyxl")
+    Mnem = ds.iloc[0, 1:].tolist()
 
     # if os.name == 'nt':  # Check if the operating system is Windows
     #     Time = pd.to_datetime(df.iloc[1:, 0], format='%m/%d/%Y').astype(np.int64) // 10**9
@@ -120,8 +60,8 @@ def read_data(datafile):
     # else:
     #     Time = (df.iloc[1:, 0] + pd.Timestamp('1899-12-31').to_julian_date()).to_numpy()
     #     Z = df.iloc[:, 1:].to_numpy()
-    Time = df.iloc[1:, 0].to_numpy()
-    Z = df.iloc[:, 1:].to_numpy()
+    Time = ds.iloc[1:, 0].to_numpy()
+    Z = ds.iloc[:, 1:].to_numpy()
     return Z, Time, Mnem
 
 
@@ -143,7 +83,6 @@ def sort_data(Z, Mnem, Spec):
 
     # Sort series by ordering of Spec
     N = len(Spec['seriesid'])
-    print(Mnem)
     permutation = [Mnem.index(spec_id) for spec_id in Spec['seriesid']]
 
     Mnem = [Mnem[i] for i in permutation]
