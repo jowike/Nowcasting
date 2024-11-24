@@ -8,7 +8,7 @@ from typing import List, Literal, Tuple
 from datetime import datetime
 from itertools import compress
 
-from scripts.utils import _convert_to_datetime, cast_spec_to_dict
+from scripts.utils import _convert_to_datetime, cast_spec_to_dict, identify_adf_nonstat_series, identify_low_variance_series
 from scripts.data_revisions import prepare_real_time_vintage_data
 from scripts.ragged_edges import shift_to_fill_trailing_nans
 from scripts.load_spec import load_spec
@@ -239,3 +239,22 @@ def transform_time_series(
 
 
 # TODO: feature selection, stationarity-based filtering, vif fot the case when spec_options are undefined
+def reduce_features_by_variance_and_stationarity(
+    ds: pd.DataFrame,
+    parameters: dict,
+    spec_options: dict = None,
+):
+    if spec_options:
+        to_write = ds.copy()
+    else:
+        ds = _convert_to_datetime(ds, [parameters["ref_date_col"]])
+
+        ds = ds.set_index(parameters["ref_date_col"]).sort_index()
+        X, y = ds.drop(columns=[parameters["y_code"]]), ds[[parameters["y_code"]]]
+
+        x_stat = X.drop(columns=identify_adf_nonstat_series(X))
+        x_est = x_stat.drop(columns=identify_low_variance_series(data=x_stat))
+
+        to_write = pd.merge(x_est, y, left_index=True, right_index=True, how="right")
+
+    return to_write

@@ -5,6 +5,7 @@ from .nodes import (
     build_spec_from_source,
     harmonize_ragged_edges,
     transform_time_series,
+    reduce_features_by_variance_and_stationarity
 )
 
 
@@ -49,10 +50,20 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "params:spec_options"
                     ],
                 outputs=[
-                    "aligned_transformed_data",
+                    "transformed_aligned_data",
                     "aligned_non_transformed_data"
                     ],
                 name="transform_time_series_node",
+            ),
+            node(
+                func=reduce_features_by_variance_and_stationarity,
+                inputs=[
+                    "transformed_aligned_data",
+                    "params:options",
+                    "params:spec_options"
+                    ],
+                outputs="reduced_transformed_data",
+                name="reduce_features_by_variance_and_stationarity_node",
             ),
         ]
     )

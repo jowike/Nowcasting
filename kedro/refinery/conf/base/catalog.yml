@@ -32,10 +32,15 @@ harmonized_data:
     sheet_name: data
     index: True
 
-aligned_transformed_data:
+transformed_aligned_data:
   type: pandas.ParquetDataset
   filepath: data/02_intermediate/transformed_data.parquet
     
 aligned_non_transformed_data:
   type: pandas.ParquetDataset
   filepath: data/02_intermediate/non_transformed_data.parquet
+
+reduced_transformed_data:
+  type: pandas.ParquetDataset
+  filepath: data/02_intermediate/reduced_transformed_data.parquet
+    
