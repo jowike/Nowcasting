@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 from typing import List, Literal, Tuple
 from datetime import datetime
+from itertools import compress
 
 from scripts.utils import _convert_to_datetime, cast_spec_to_dict
 from scripts.data_revisions import prepare_real_time_vintage_data
@@ -200,10 +201,10 @@ def transform_time_series(
 
         X_df = pd.DataFrame(
             x_est, columns=header, index=Time[~nanLE]
-        )  # Transformed, standarized, imputed data
+        ).reset_index().rename(columns={"index": parameters["ref_date_col"]})  # Transformed, standarized, imputed data
         Z_df = pd.DataFrame(
             data=Z, columns=header, index=Time
-        )  # Source data (just in cases)
+        ).reset_index().rename(columns={"index": parameters["ref_date_col"]})  # Source data (just in cases)
     else:
         Spec = cast_spec_to_dict(ds_spec)
 
@@ -218,9 +219,23 @@ def transform_time_series(
         xNaN = (X - Mx) / Wx  # Standardize series
 
         optNaN = {"method": 2, "k": 3}
-        # x_est, _, nanLE = remNaNs_spline(xNaN, optNaN)  # Impute series
+        x_est, indNaN, nanLE = remNaNs_spline(xNaN, optNaN)  # Impute series
 
-        return X_df.reset_index(), Z_df.reset_index()
+        x_header = list(compress(header, ~indNaN.all(axis=0)))
+        X_est = x_est[:, ~indNaN.all(axis=0)]  # Drop all-NaN columns
+        Spec = cast_spec_to_dict(ds_spec.loc[ds_spec["SeriesID"].isin(x_header)])
+
+        summarize(X_est, Time[~nanLE], Spec)
+
+        X_df = pd.DataFrame(
+            X_est, columns=x_header, index=Time[~nanLE]
+        ).reset_index().rename(columns={"index": parameters["ref_date_col"]})  # Transformed, standarized, imputed data
+
+        Z_df = pd.DataFrame(
+            data=Z, columns=header, index=Time
+        ).reset_index().rename(columns={"index": parameters["ref_date_col"]})  # Source data (just in cases)
+
+    return X_df, Z_df
 
 
 # TODO: feature selection, stationarity-based filtering, vif fot the case when spec_options are undefined

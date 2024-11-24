@@ -59,6 +59,9 @@ def remNaNs_spline(X,options):
         for i in range(N):  # loop through columns
             x = X[:, i]
             isnanx = indNaN[:, i]
+
+            if isnanx.all(): continue
+
             x[isnanx]  = np.nanmedian(x)  # Replace missing values series median
             x_MA = filter(np.concatenate(([x[0]] * k, x, [x[-1]] * k)), k)  # Apply filter
             x_MA = x_MA[2*k:]  # Match dimensions
@@ -78,6 +81,9 @@ def remNaNs_spline(X,options):
         for i in range(N):
             x = X[:, i]
             isnanx = np.isnan(x)
+
+            if isnanx.all(): continue
+
             t1 = np.where(~isnanx)[0][0]  # First non-NaN entry
             t2 = np.where(~isnanx)[0][-1]  # Last non-NaN entry
 
@@ -140,6 +146,9 @@ def remNaNs_spline(X,options):
         for i in range(N):
             x = X[:, i]
             isnanx = np.isnan(x)
+            
+            if isnanx.all(): continue
+
             t1 = np.where(~isnanx)[0][0]
             t2 = np.where(~isnanx)[0][-1]
 
