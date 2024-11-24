@@ -37,15 +37,20 @@ def lag_to_fill_ragged_edges(df):
     return df
 
 
-def prepare_auto_spec(df):
+def cast_spec_to_dict(df):
     """
-    Load model specification for a dynamic factor model (DFM).
+    Parse variable specifications from a DataFrame and return them as a dictionary.
 
-    Parameters:
-    - specfile: str, path to the Excel file containing the model specification.
+    This function processes a DataFrame containing model specifications, ensuring
+    column headers are lowercase and extracting required fields (`seriesid`, 
+    `frequency`, and `transformation`). It raises an error if any of the required 
+    columns are missing.
+
+    Args:
+        df (pd.DataFrame): The input DataFrame containing the variable specification data.
 
     Returns:
-    - spec: dict, containing the model specification.
+    - spec: dict, containing the variables specification.
     """
     raw_data = df.copy()
     # Convert all headers to lowercase for consistency
@@ -55,7 +60,7 @@ def prepare_auto_spec(df):
     spec = {}
 
     # Fields to extract from the Excel file
-    field_names = ['seriesid', 'frequency', 'transformation']
+    field_names = ['seriesid', 'seriesname', 'frequency', 'transformation', 'units', 'category']
     for field in field_names:
         if field in raw_data.columns:
             spec[field] = raw_data[field].tolist()

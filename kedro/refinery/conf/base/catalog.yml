@@ -16,9 +16,9 @@ vintage_data:
   type: pandas.ParquetDataset
   filepath: data/01_raw/vintage_data.parquet
 
-freq_details:
+ds_spec:
   type: pandas.CSVDataset
-  filepath: data/02_intermediate/series_freq_details.csv
+  filepath: data/02_intermediate/variable.csv
 
 harmonized_data:
   type: pandas.ExcelDataset

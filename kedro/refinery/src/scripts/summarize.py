@@ -60,20 +60,25 @@ def summarize(X, Time, Spec):
         else:
             units_transformed = f'{units} ({transform})' if len(f'{units} ({transform})') <= 12 else f'{units[:6]} ({transform})'
 
-        t_obs_start = np.where(t_obs)[0][0]
-        t_obs_end = np.where(t_obs)[0][-1]
-        obs_date_start = pd.to_datetime(Time[t_obs_start]).strftime(format_date)
-        obs_date_end = pd.to_datetime(Time[t_obs_end]).strftime(format_date)
-        date_range = f'{obs_date_start}-{obs_date_end}'
+        if num_obs:
+            t_obs_start = np.where(t_obs)[0][0]
+            t_obs_end = np.where(t_obs)[0][-1]
+            obs_date_start = pd.to_datetime(Time[t_obs_start]).strftime(format_date)
+            obs_date_end = pd.to_datetime(Time[t_obs_end]).strftime(format_date)
 
-        y = X[t_obs, i]
-        d = Time[t_obs]
-        mean_series = np.nanmean(y)
-        stdv_series = np.nanstd(y)
-        min_series, t_min = np.min(y), np.argmin(y)
-        max_series, t_max = np.max(y), np.argmax(y)
-        min_date = pd.to_datetime(d[t_min]).strftime(format_date)
-        max_date = pd.to_datetime(d[t_max]).strftime(format_date)
+            y = X[t_obs, i]
+            d = Time[t_obs]
+            mean_series = np.nanmean(y)
+            stdv_series = np.nanstd(y)
+            min_series, t_min = np.min(y), np.argmin(y)
+            max_series, t_max = np.max(y), np.argmax(y)
+            min_date = pd.to_datetime(d[t_min]).strftime(format_date)
+            max_date = pd.to_datetime(d[t_max]).strftime(format_date)
+        else:
+            obs_date_start, obs_date_end, min_date, max_date = [""] * 4
+            mean_series, stdv_series, min_series, max_series = [np.nan] * 4
+
+        date_range = f'{obs_date_start}-{obs_date_end}'
 
         print(f'{data_series:30s} | {num_obs:17d} {units_transformed:12s} {frequency:10s} {mean_series:8.1f} {stdv_series:8.1f} {min_series:10.1f} {max_series:10.1f}')
         print(f'{series_id:30s} | {date_range:17s} {"":12s} {"":10s} {"":8s} {"":8s} {min_date:8s} {max_date:8s}')

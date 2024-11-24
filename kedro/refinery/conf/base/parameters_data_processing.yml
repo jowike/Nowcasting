@@ -2,17 +2,22 @@ spec_options:
   filepath: data/0_source/Spec_US_example.xls
   country: US
 
-vintage_options:
+options:
   y_code: PCEC96
   ref_date: 2024-08-01
   sample_start: 2000-01-01
   vintage_name: real-time
-
-dataprep_options:
   series_code_col: VariableCode
+  series_name_col: Description
   ref_date_col: ReferenceDate
   pub_date_col: PublicationDate
   series_val_col: VariableValue
   freq_desc_col: FrequencyDescription
+  unit_col: Unit
+  series_categ_col: Category
+  scope_freq_desc:
+    - Monthly
+    - Quarterly
+    - Monthly, End of Period
   default_transf_code: chg
 
