@@ -20,4 +20,5 @@ options:
     - Quarterly
     - Monthly, End of Period
   default_transf_code: chg
+  mifs_method: MRMR
 

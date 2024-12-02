@@ -43,4 +43,9 @@ aligned_non_transformed_data:
 reduced_transformed_data:
   type: pandas.ParquetDataset
   filepath: data/02_intermediate/reduced_transformed_data.parquet
+
+selected_series:
+  type: pandas.ParquetDataset
+  filepath: data/04_feature/selected_series.parquet
+
     

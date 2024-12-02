@@ -5,7 +5,9 @@ from .nodes import (
     build_spec_from_source,
     harmonize_ragged_edges,
     transform_time_series,
-    reduce_features_by_variance_and_stationarity
+    reduce_features_by_variance_and_stationarity,
+    apply_series_selection,
+    ensemble_forecasts
 )
 
 
@@ -17,7 +19,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs=[
                     "revision_history",
                     "params:options",
-                    "params:spec_options",
+                    # "params:spec_options",
                 ],
                 outputs="vintage_data",
                 name="prepare_vintage_data_node",
@@ -47,7 +49,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "harmonized_data",
                     "ds_spec",
                     "params:options",
-                    "params:spec_options"
+                    # "params:spec_options"
                     ],
                 outputs=[
                     "transformed_aligned_data",
@@ -60,10 +62,29 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs=[
                     "transformed_aligned_data",
                     "params:options",
-                    "params:spec_options"
+                    # "params:spec_options"
                     ],
                 outputs="reduced_transformed_data",
                 name="reduce_features_by_variance_and_stationarity_node",
+            ),
+            node(
+                func=apply_series_selection,
+                inputs=[
+                    "reduced_transformed_data",
+                    "params:options",
+                    # "params:spec_options"
+                    ],
+                outputs="selected_series",
+                name="select_series_node",
+            ),
+            node(
+                func=ensemble_forecasts,
+                inputs=[
+                    "selected_series",
+                    "params:options"
+                    ],
+                outputs=None,
+                name="ensemble_forecasts_node",
             ),
         ]
     )

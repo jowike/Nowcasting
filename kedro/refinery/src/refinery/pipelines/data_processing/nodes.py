@@ -1,6 +1,6 @@
 import sys
 
-sys.path.append("/Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/src/scripts")
+sys.path.append("/Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/dependencies/")
 
 import pandas as pd
 import numpy as np
@@ -8,13 +8,17 @@ from typing import List, Literal, Tuple
 from datetime import datetime
 from itertools import compress
 
-from scripts.utils import _convert_to_datetime, cast_spec_to_dict, identify_adf_nonstat_series, identify_low_variance_series
-from scripts.data_revisions import prepare_real_time_vintage_data
-from scripts.ragged_edges import shift_to_fill_trailing_nans
-from scripts.load_spec import load_spec
-from scripts.remNaNs_spline import remNaNs_spline
-from scripts.load_data import load_data
-from scripts.summarize import summarize
+from sklearn.linear_model import Ridge
+
+from utils import _convert_to_datetime, cast_spec_to_dict, identify_adf_nonstat_series, identify_low_variance_series
+from data_revisions import prepare_real_time_vintage_data
+from ragged_edges import shift_to_fill_trailing_nans
+from load_spec import load_spec
+from remNaNs_spline import remNaNs_spline
+from load_data import load_data
+from summarize import summarize
+from feature_selection import mtsfs
+from estimation import fit_predict, arima_predict
 
 
 def prepare_vintage_data(
@@ -258,3 +262,23 @@ def reduce_features_by_variance_and_stationarity(
         to_write = pd.merge(x_est, y, left_index=True, right_index=True, how="right")
 
     return to_write
+
+
+def apply_series_selection(
+    ds: pd.DataFrame,
+    parameters: dict,
+    spec_options: dict = None,
+):
+    if spec_options:
+        to_write = ds.copy()
+    else:
+        to_write = mtsfs(ds=ds, series_name=parameters["y_code"], method=parameters["mifs_method"])
+    return to_write
+
+
+def ensemble_forecasts(
+        ds: pd.DataFrame,
+        parameters: dict
+):
+    ridge_forecast = fit_predict(ds=ds, ref_date_col=parameters["ref_date_col"], model=Ridge(), series_name=parameters["y_code"], reference_date=parameters['ref_date'], n_periods=72)
+    arima_forecast = arima_predict(ds=ds, ref_date_col=parameters["ref_date_col"], series_name=parameters["y_code"], reference_date=parameters['ref_date'], n_periods=72)
