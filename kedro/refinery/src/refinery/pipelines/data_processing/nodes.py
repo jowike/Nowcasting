@@ -10,7 +10,9 @@ from itertools import compress
 
 from sklearn.linear_model import Ridge
 
-from utils import _convert_to_datetime, cast_spec_to_dict, identify_adf_nonstat_series, identify_low_variance_series
+from utils import _convert_to_datetime, cast_spec_to_dict, suggest_transformation
+from utils import test_variance as tvar
+from utils import test_stationarity as tstat
 from data_revisions import prepare_real_time_vintage_data
 from ragged_edges import shift_to_fill_trailing_nans
 from load_spec import load_spec
@@ -69,7 +71,7 @@ def prepare_vintage_data(
     return df_long
 
 
-def build_spec_from_source(ds: pd.DataFrame, parameters: dict) -> pd.DataFrame:
+def suggest_spec(ds: pd.DataFrame, parameters: dict) -> pd.DataFrame:
     """
     Build a standardized specification of variables from the source data.
 
@@ -140,7 +142,8 @@ def build_spec_from_source(ds: pd.DataFrame, parameters: dict) -> pd.DataFrame:
     )
 
     # Add a default transformation column
-    renamed_df["Transformation"] = parameters["default_transf_code"]
+    renamed_df["Transformation"] = [suggest_transformation(unit) for unit in renamed_df["Units"]]
+
 
     # Return the final DataFrame with standardized columns
     return renamed_df[output_columns]
@@ -218,6 +221,12 @@ def transform_time_series(
         summarize(X.astype(float), Time, Spec)
 
         # Prepare data -----------------------------------------------------------
+        T, N = X.shape  # Gives dimensions for data input
+        indNaN = np.isnan(X)  # Returns location of NaNs
+        rem = np.sum(indNaN, axis=0) > T * 0.8  # Returns columns sum for NaN values. Marks true for rows with more than 80% NaN
+        X = X[:, ~rem]
+        x_header = list(compress(header, ~rem))
+
         Mx = np.nanmean(X, axis=0)
         Wx = np.nanstd(X, axis=0)
         xNaN = (X - Mx) / Wx  # Standardize series
@@ -225,11 +234,13 @@ def transform_time_series(
         optNaN = {"method": 2, "k": 3}
         x_est, indNaN, nanLE = remNaNs_spline(xNaN, optNaN)  # Impute series
 
-        x_header = list(compress(header, ~indNaN.all(axis=0)))
+        x_header = list(compress(x_header, ~indNaN.all(axis=0)))
         X_est = x_est[:, ~indNaN.all(axis=0)]  # Drop all-NaN columns
+
+
         Spec = cast_spec_to_dict(ds_spec.loc[ds_spec["SeriesID"].isin(x_header)])
 
-        summarize(X_est, Time[~nanLE], Spec)
+        # summarize(X_est, Time[~nanLE], Spec)
 
         X_df = pd.DataFrame(
             X_est, columns=x_header, index=Time[~nanLE]
@@ -241,9 +252,7 @@ def transform_time_series(
 
     return X_df, Z_df
 
-
-# TODO: feature selection, stationarity-based filtering, vif fot the case when spec_options are undefined
-def reduce_features_by_variance_and_stationarity(
+def test_variance(
     ds: pd.DataFrame,
     parameters: dict,
     spec_options: dict = None,
@@ -256,19 +265,41 @@ def reduce_features_by_variance_and_stationarity(
         ds = ds.set_index(parameters["ref_date_col"]).sort_index()
         X, y = ds.drop(columns=[parameters["y_code"]]), ds[[parameters["y_code"]]]
 
-        x_stat = X.drop(columns=identify_adf_nonstat_series(X))
-        x_est = x_stat.drop(columns=identify_low_variance_series(data=x_stat))
+        x_est = X.drop(columns=tvar(data=X))
 
         to_write = pd.merge(x_est, y, left_index=True, right_index=True, how="right")
 
-    return to_write
+    return to_write.reset_index()
 
+# TODO: feature selection, stationarity-based filtering, vif fot the case when spec_options are undefined
+def test_stationarity(
+    ds: pd.DataFrame,
+    parameters: dict,
+    spec_options: dict = None,
+):
+    if spec_options:
+        to_write = ds.copy()
+    else:
+        ds = _convert_to_datetime(ds, [parameters["ref_date_col"]])
+
+        ds = ds.set_index(parameters["ref_date_col"]).sort_index()
+        X, y = ds.drop(columns=[parameters["y_code"]]), ds[[parameters["y_code"]]]
+
+        x_stat = X.drop(columns=tstat(X))
+
+        to_write = pd.merge(x_stat, y, left_index=True, right_index=True, how="right")
+
+    return to_write.reset_index()
 
 def apply_series_selection(
     ds: pd.DataFrame,
     parameters: dict,
     spec_options: dict = None,
 ):
+    
+    ds = _convert_to_datetime(ds, [parameters["ref_date_col"]])
+    ds = ds.set_index(parameters["ref_date_col"]).sort_index()
+    
     if spec_options:
         to_write = ds.copy()
     else:

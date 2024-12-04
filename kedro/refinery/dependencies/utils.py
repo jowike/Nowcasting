@@ -1,3 +1,4 @@
+import re
 import pandas as pd
 from typing import List
 
@@ -73,7 +74,46 @@ def cast_spec_to_dict(df):
 
     return spec
 
-def identify_low_variance_series(
+
+def suggest_transformation(unit):
+    """
+    Suggests a transformation based on the economic meaning of the unit using regex.
+    """
+    if re.search(r"(Billions|Millions|Thousands)\s+of\s+Chained\s+\d{4}\s+Dollars", unit):
+        return "pca"  # Dla jednostek typu "Billions of Chained 2017 Dollars" itp. używamy logarytmizacji
+
+    if re.search(r"Index", unit):
+        return "pch"  # Wskaźniki, np. CPI, używamy procentowej zmiany
+
+    if re.search(r"Percent", unit):
+        return "lin" # Jeśli jednostka to Percent, nie stosujemy transformacji
+
+    if re.search(r"Percent\s+Change\s+at\s+Annual\s+Rate", unit):
+        return "lin"  # Jeśli to już procentowa zmiana roczna, nie wymagamy dalszej transformacji
+
+    if re.search(r"Level", unit):
+        return "pca"  # Poziomy (np. liczba osób, PKB) — stosujemy procentową zmianę roczną (pca)
+
+
+    if re.search(r"Ratio", unit):
+        return "lin"  # Wskaźniki proporcji — nie wymagają transformacji
+
+
+    if re.search(r"Rate", unit):
+        return "lin"  # Stopy procentowe (np. procentowa stopa bezrobocia) — pozostawiamy bez zmian
+
+
+    if re.search(r"(Dollars|Euro|Yen|Pounds|Rupees|Franc|Pesos)\s+per\s+[A-Za-z]+", unit):
+        return "pch"  # Ceny jednostkowe (np. "Dollars per Gallon") — zmiana procentowa
+
+
+    if re.search(r"Thousands\s+of\s+[A-Za-z]+", unit):
+        return "log"  # Jednostki liczbowe w tysiącach — logarytmizacja
+
+
+    return "ch1"
+
+def test_variance(
     data: pd.DataFrame,
 ):
     # discard low-variance features
@@ -90,7 +130,7 @@ def identify_low_variance_series(
     return list(set(data.columns)-set(features))
 
 # stage 4.
-def identify_adf_nonstat_series(df: pd.DataFrame) -> pd.DataFrame:
+def test_stationarity(df: pd.DataFrame) -> pd.DataFrame:
     """Detect series with non-stationarity effects"""
 
     def __adfuller_test(
@@ -135,6 +175,7 @@ def identify_adf_nonstat_series(df: pd.DataFrame) -> pd.DataFrame:
     for _id in df.columns:
         series_df = df[[_id]]
         series = series_df.dropna().sort_index()
+        
         test_pval = __adfuller_test(series=series, name=_id)
         if test_pval < 0.05:
             stat.append(_id)

@@ -2,10 +2,11 @@ from kedro.pipeline import Pipeline, node, pipeline
 
 from .nodes import (
     prepare_vintage_data,
-    build_spec_from_source,
+    suggest_spec,
     harmonize_ragged_edges,
     transform_time_series,
-    reduce_features_by_variance_and_stationarity,
+    test_variance,
+    test_stationarity,
     apply_series_selection,
     ensemble_forecasts
 )
@@ -25,7 +26,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="prepare_vintage_data_node",
             ),
             node(
-                func=build_spec_from_source,
+                func=suggest_spec,
                 inputs=[
                     "revision_history",
                     "params:options",
@@ -58,19 +59,29 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="transform_time_series_node",
             ),
             node(
-                func=reduce_features_by_variance_and_stationarity,
+                func=test_variance,
                 inputs=[
                     "transformed_aligned_data",
                     "params:options",
                     # "params:spec_options"
                     ],
-                outputs="reduced_transformed_data",
-                name="reduce_features_by_variance_and_stationarity_node",
+                outputs="transformed_data_var",
+                name="test_variance_node",
+            ),
+            node(
+                func=test_stationarity,
+                inputs=[
+                    "transformed_data_var",
+                    "params:options",
+                    # "params:spec_options"
+                    ],
+                outputs="transformed_data_stat",
+                name="test_stationarity_node",
             ),
             node(
                 func=apply_series_selection,
                 inputs=[
-                    "reduced_transformed_data",
+                    "transformed_data_var",
                     "params:options",
                     # "params:spec_options"
                     ],

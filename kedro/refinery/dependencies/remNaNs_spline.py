@@ -69,6 +69,7 @@ def remNaNs_spline(X,options):
             X[:, i] = x  # Replace vector
     elif method == 2:   # replace missing values after removing leading and closing zeros
         rem1 = np.sum(indNaN, axis=1) > N * 0.8  # Returns row sum for NaN values. Marks true for rows with more than 80% NaN
+        # rem1 = np.sum(indNaN, axis=1) == N
         nanLead = np.cumsum(rem1) == np.arange(1, T+1)
         nanEnd = np.cumsum(rem1[::-1]) == np.arange(1, T+1)
         nanEnd = nanEnd[::-1]  # Reverses nanEnd

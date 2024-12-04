@@ -162,7 +162,7 @@ def transform_data(Z, Time, Spec):
         Z (np.ndarray): Adjusted raw data
     """
     header = Z[0, :]
-    Z = Z[1:, :]
+    Z = np.float64(Z[1:, :])
 
     T, N = Z.shape
 
@@ -178,28 +178,30 @@ def transform_data(Z, Time, Spec):
         assert header[i]== Spec["seriesid"][i]
         series = Spec["seriesname"][i]
         
-        if formula == "lin":  # Levels (No Transformation)
+         # Apply transformations based on formula
+        if formula == 'lin':  # Levels (No Transformation)
             X[:, i] = Z[:, i]
-        elif formula == "chg":  # Change (Difference)
-            X[(t1-1):, i] = np.concatenate(([np.nan], Z[t1:, i] - Z[:-t1, i]))
-        elif formula == "ch1":  # Year over Year Change (Difference)
+        elif formula == 'chg':  # Change (Difference)
+            X[t1:T:step, i] = np.concatenate(([np.nan], Z[(t1+step):T:step, i] - Z[t1:(T-t1):step, i]))
+        elif formula == 'ch1':  # Year over Year Change (Difference)
             if T > 12:
-                X[12 + t1 :, i] = Z[12 + t1 :, i] - Z[:-12, i]
-        elif formula == "pch":  # Percent Change
-            X[(t1-1):, i] = 100 * np.concatenate(([np.nan], Z[t1:, i] / Z[:-t1, i] - 1))
-        elif formula == "pc1":  # Year over Year Percent Change
-            if T > 12:
-                X[12 + t1 :, i] = 100 * (Z[12 + t1 :, i] / Z[:-12, i] - 1)
-        elif formula == "pca":  # Percent Change (Annual Rate)
-            X[(t1-1):, i] = 100 * np.concatenate(
-                ([np.nan], (Z[t1:, i] / Z[:-step, i]) ** (1 / n) - 1)
+                X[(12+t1):T:step, i] = Z[(12+t1):T:step, i] - Z[t1:(T - 12):step, i]
+        elif formula == 'pch':  # Percent Change
+            X[t1:T:step, i] = 100 * np.concatenate(
+                ([np.nan], Z[(t1+step):T:step, i] / Z[t1:(T-t1):step, i] - 1)
             )
-        elif formula == "log":  # Natural Log
+        elif formula == 'pc1':  # Year over Year Percent Change
+            if T > 12:
+                # Year over Year Percent Change, handle division by zero
+                X[(12+t1):T:step, i] = 100 * (Z[(12+t1):T:step, i] / Z[t1:(T-12):step, i] - 1)
+        elif formula == 'pca':  # Percent Change (Annual Rate)
+            X[t1:T:step, i] = 100 * np.concatenate(
+                ([np.nan], (Z[(t1+step):T:step, i] / Z[t1:(T-step):step, i]) ** (1 / n) - 1)
+            )
+        elif formula == 'log':  # Natural Log
             X[:, i] = np.log(Z[:, i])
         else:
-            warnings.warn(
-                f"Transformation '{formula}' not found for {series}. Using untransformed data."
-            )
+            warnings.warn(f"Transformation '{formula}' not found for {series}. Using untransformed data.")
             X[:, i] = Z[:, i]
 
     # Drop first quarter of observations since transformations cause missing values
