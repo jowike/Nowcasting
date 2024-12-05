@@ -8,23 +8,26 @@ from .nodes import (
     test_variance,
     test_stationarity,
     apply_series_selection,
-    ensemble_forecasts
+    estimate_ml_models,
+    estimate_auto_arima,
+    estimate_var,
+
 )
 
 
 def create_pipeline(**kwargs) -> Pipeline:
     return pipeline(
         [
-            node(
-                func=prepare_vintage_data,
-                inputs=[
-                    "revision_history",
-                    "params:options",
-                    # "params:spec_options",
-                ],
-                outputs="vintage_data",
-                name="prepare_vintage_data_node",
-            ),
+            # node(
+            #     func=prepare_vintage_data,
+            #     inputs=[
+            #         "revision_history",
+            #         "params:options",
+            #         # "params:spec_options",
+            #     ],
+            #     outputs="vintage_data",
+            #     name="prepare_vintage_data_node",
+            # ),
             node(
                 func=suggest_spec,
                 inputs=[
@@ -32,7 +35,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "params:options",
                     ],
                 outputs="ds_spec",
-                name="build_vars_spec",
+                name="suggest_spec_node",
             ),
             node(
                 func=harmonize_ragged_edges,
@@ -81,7 +84,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             node(
                 func=apply_series_selection,
                 inputs=[
-                    "transformed_data_var",
+                    "transformed_data_stat",
                     "params:options",
                     # "params:spec_options"
                     ],
@@ -89,13 +92,31 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="select_series_node",
             ),
             node(
-                func=ensemble_forecasts,
+                func=estimate_ml_models,
                 inputs=[
                     "selected_series",
                     "params:options"
                     ],
                 outputs=None,
-                name="ensemble_forecasts_node",
+                name="estimate_ml_models_node",
+            ),
+            node(
+                func=estimate_auto_arima,
+                inputs=[
+                    "selected_series",
+                    "params:options"
+                    ],
+                outputs=None,
+                name="estimate_arima_node",
+            ),
+            node(
+                func=estimate_var,
+                inputs=[
+                    "selected_series",
+                    "params:options"
+                    ],
+                outputs=None,
+                name="estimate_var_node",
             ),
         ]
     )

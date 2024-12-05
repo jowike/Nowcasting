@@ -21,4 +21,5 @@ options:
     - Monthly, End of Period
   default_transf_code: chg
   mifs_method: MRMR
+  backcasting_period: 72
 

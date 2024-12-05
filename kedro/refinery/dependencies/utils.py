@@ -1,4 +1,5 @@
 import re
+import numpy as np
 import pandas as pd
 from typing import List
 
@@ -80,10 +81,10 @@ def suggest_transformation(unit):
     Suggests a transformation based on the economic meaning of the unit using regex.
     """
     if re.search(r"(Billions|Millions|Thousands)\s+of\s+Chained\s+\d{4}\s+Dollars", unit):
-        return "pca"  # Dla jednostek typu "Billions of Chained 2017 Dollars" itp. używamy logarytmizacji
+        return "pc1"
 
     if re.search(r"Index", unit):
-        return "pch"  # Wskaźniki, np. CPI, używamy procentowej zmiany
+        return "ch1"  # Wskaźniki, np. CPI, używamy zmiany
 
     if re.search(r"Percent", unit):
         return "lin" # Jeśli jednostka to Percent, nie stosujemy transformacji
@@ -92,7 +93,7 @@ def suggest_transformation(unit):
         return "lin"  # Jeśli to już procentowa zmiana roczna, nie wymagamy dalszej transformacji
 
     if re.search(r"Level", unit):
-        return "pca"  # Poziomy (np. liczba osób, PKB) — stosujemy procentową zmianę roczną (pca)
+        return "pc1"  # Poziomy (np. liczba osób, PKB) — stosujemy procentową zmianę roczną (pca)
 
 
     if re.search(r"Ratio", unit):
@@ -104,12 +105,11 @@ def suggest_transformation(unit):
 
 
     if re.search(r"(Dollars|Euro|Yen|Pounds|Rupees|Franc|Pesos)\s+per\s+[A-Za-z]+", unit):
-        return "pch"  # Ceny jednostkowe (np. "Dollars per Gallon") — zmiana procentowa
+        return "pc1"  # Ceny jednostkowe (np. "Dollars per Gallon") — zmiana procentowa
 
 
     if re.search(r"Thousands\s+of\s+[A-Za-z]+", unit):
-        return "log"  # Jednostki liczbowe w tysiącach — logarytmizacja
-
+        return "pc1"  # Jednostki liczbowe w tysiącach — logarytmizacja
 
     return "ch1"
 
@@ -181,3 +181,33 @@ def test_stationarity(df: pd.DataFrame) -> pd.DataFrame:
             stat.append(_id)
 
     return list(set(df.columns) - set(stat))
+
+
+def _error(actual: np.ndarray, predicted: np.ndarray):
+    """ Simple error """
+    return actual - predicted
+
+def _percentage_error(actual: np.ndarray, predicted: np.ndarray):
+    """
+    Percentage error
+
+    Note: result is NOT multiplied by 100
+    """
+    EPSILON = 1e-10
+    return _error(actual, predicted) / (actual + EPSILON)
+
+def mape(actual: np.ndarray, predicted: np.ndarray):
+    """
+    Mean Absolute Percentage Error
+
+    Note: result is NOT multiplied by 100
+    """
+    return np.mean(np.abs(_percentage_error(actual, predicted)))
+
+def mse(actual: np.ndarray, predicted: np.ndarray):
+    """ Mean Squared Error """
+    return np.mean(np.square(_error(actual, predicted)))
+
+def rmse(actual: np.ndarray, predicted: np.ndarray):
+    """ Root Mean Squared Error """
+    return np.sqrt(mse(actual, predicted))

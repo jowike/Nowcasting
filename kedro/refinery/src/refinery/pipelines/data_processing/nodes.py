@@ -4,13 +4,11 @@ sys.path.append("/Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/depen
 
 import pandas as pd
 import numpy as np
-from typing import List, Literal, Tuple
-from datetime import datetime
 from itertools import compress
 
-from sklearn.linear_model import Ridge
+from sklearn.metrics import r2_score
 
-from utils import _convert_to_datetime, cast_spec_to_dict, suggest_transformation
+from utils import _convert_to_datetime, cast_spec_to_dict, suggest_transformation, rmse, mape
 from utils import test_variance as tvar
 from utils import test_stationarity as tstat
 from data_revisions import prepare_real_time_vintage_data
@@ -20,7 +18,7 @@ from remNaNs_spline import remNaNs_spline
 from load_data import load_data
 from summarize import summarize
 from feature_selection import mtsfs
-from estimation import fit_predict, arima_predict
+from estimation import arima_predict, auto_train_evaluate, var_predict
 
 
 def prepare_vintage_data(
@@ -197,14 +195,16 @@ def transform_time_series(
         summarize(X.astype(float), Time, Spec)
 
         # Prepare data -----------------------------------------------------------
-        Mx = np.nanmean(X, axis=0)
-        Wx = np.nanstd(X, axis=0)
-        xNaN = (X - Mx) / Wx  # Standardize series
+        # Mx = np.nanmean(X, axis=0)
+        # Wx = np.nanstd(X, axis=0)
+        # xNaN = (X - Mx) / Wx  # Standardize series
 
         optNaN = {"method": 2, "k": 3}
-        x_est, _, nanLE = remNaNs_spline(xNaN, optNaN)  # Impute series
+        # x_est, _, nanLE = remNaNs_spline(xNaN, optNaN)  # Impute series
+        x_est, _, nanLE = remNaNs_spline(X, optNaN)  # Impute series
+        X[np.isnan(X)] = x_est[np.isnan(X)]
 
-        summarize(x_est, Time[~nanLE], Spec)
+        summarize(X, Time[~nanLE], Spec)
 
         X_df = pd.DataFrame(
             x_est, columns=header, index=Time[~nanLE]
@@ -225,25 +225,28 @@ def transform_time_series(
         indNaN = np.isnan(X)  # Returns location of NaNs
         rem = np.sum(indNaN, axis=0) > T * 0.8  # Returns columns sum for NaN values. Marks true for rows with more than 80% NaN
         X = X[:, ~rem]
-        x_header = list(compress(header, ~rem))
+        x_header=list(compress(header, ~rem))
 
-        Mx = np.nanmean(X, axis=0)
-        Wx = np.nanstd(X, axis=0)
-        xNaN = (X - Mx) / Wx  # Standardize series
+        # Mx = np.nanmean(X, axis=0)
+        # Wx = np.nanstd(X, axis=0)
+        # xNaN = (X - Mx) / Wx  # Standardize series
 
         optNaN = {"method": 2, "k": 3}
-        x_est, indNaN, nanLE = remNaNs_spline(xNaN, optNaN)  # Impute series
+        # x_est, _, nanLE = remNaNs_spline(xNaN, optNaN)  # Impute series
+        x_est, indNaN, nanLE = remNaNs_spline(X, optNaN)  # Impute series
 
-        x_header = list(compress(x_header, ~indNaN.all(axis=0)))
-        X_est = x_est[:, ~indNaN.all(axis=0)]  # Drop all-NaN columns
+        X[np.isnan(X)] = x_est[np.isnan(X)]
 
+        indFin = np.isfinite(x_est)
+        X = X[:, indFin.all(axis=0)]  # Drop all-NaN columns
+        x_header = list(compress(x_header, indFin.all(axis=0)))
 
         Spec = cast_spec_to_dict(ds_spec.loc[ds_spec["SeriesID"].isin(x_header)])
 
-        # summarize(X_est, Time[~nanLE], Spec)
+        summarize(X, Time[~nanLE], Spec)
 
         X_df = pd.DataFrame(
-            X_est, columns=x_header, index=Time[~nanLE]
+            X, columns=x_header, index=Time[~nanLE]
         ).reset_index().rename(columns={"index": parameters["ref_date_col"]})  # Transformed, standarized, imputed data
 
         Z_df = pd.DataFrame(
@@ -307,9 +310,54 @@ def apply_series_selection(
     return to_write
 
 
-def ensemble_forecasts(
+def estimate_ml_models(
         ds: pd.DataFrame,
         parameters: dict
 ):
-    ridge_forecast = fit_predict(ds=ds, ref_date_col=parameters["ref_date_col"], model=Ridge(), series_name=parameters["y_code"], reference_date=parameters['ref_date'], n_periods=72)
-    arima_forecast = arima_predict(ds=ds, ref_date_col=parameters["ref_date_col"], series_name=parameters["y_code"], reference_date=parameters['ref_date'], n_periods=72)
+    # Example usage
+    best_model_result = auto_train_evaluate(
+        ds=ds,
+        ref_date_col=parameters["ref_date_col"],
+        series_name=parameters["y_code"],
+        reference_date=parameters["ref_date"],
+        n_periods=parameters["backcasting_period"],
+    )
+
+    # Print the best model's details
+    print(f"Best Model: {best_model_result['best_model']}")
+    print(f"R-Squared: {best_model_result['r_squared']}")
+    print(f"MAPE: {best_model_result['mape']}")
+    print(f"RMSE: {best_model_result['rmse']}")
+    print(f"Forecast: {best_model_result['predictions']['forecast']}")
+
+def estimate_auto_arima(
+    ds: pd.DataFrame,
+    parameters: dict
+):
+    reference_date = parameters['ref_date']
+    arima_pred = arima_predict(ds=ds, ref_date_col=parameters["ref_date_col"], series_name=parameters["y_code"], reference_date=reference_date, n_periods=72)
+    arima_forecast, arima_backcast = arima_pred["y_pred"].loc[reference_date], arima_pred["y_pred"].drop(reference_date)
+    y_actual, T = arima_pred["y_actual"], arima_backcast.index
+
+    # Print the best model's details
+    print(f"Model: ARIMA")
+    print(f"R-Squared: {r2_score(y_true=y_actual.loc[T], y_pred=arima_backcast)}")
+    print(f"MAPE: {mape(actual=y_actual.loc[T], predicted=arima_backcast)}")
+    print(f"RMSE: {rmse(actual=y_actual.loc[T], predicted=arima_backcast)}")
+    print(f"Forecast: {arima_forecast}")
+
+def estimate_var(
+    ds: pd.DataFrame,
+    parameters: dict
+):
+    reference_date = parameters['ref_date']
+    var_pred = var_predict(ds=ds, ref_date_col=parameters["ref_date_col"], series_name=parameters["y_code"], reference_date=reference_date, n_periods=72)
+    var_forecast, var_backcast = var_pred["y_pred"].loc[reference_date], var_pred["y_pred"].drop(reference_date)
+    y_actual, T = var_pred["y_actual"], var_backcast.index
+
+    # Print the best model's details
+    print(f"Model: VAR")
+    print(f"R-Squared: {r2_score(y_true=y_actual.loc[T], y_pred=var_backcast)}")
+    print(f"MAPE: {mape(actual=y_actual.loc[T], predicted=var_backcast)}")
+    print(f"RMSE: {rmse(actual=y_actual.loc[T], predicted=var_backcast)}")
+    print(f"Forecast: {var_forecast}")
