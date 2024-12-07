@@ -18,16 +18,16 @@ from .nodes import (
 def create_pipeline(**kwargs) -> Pipeline:
     return pipeline(
         [
-            # node(
-            #     func=prepare_vintage_data,
-            #     inputs=[
-            #         "revision_history",
-            #         "params:options",
-            #         # "params:spec_options",
-            #     ],
-            #     outputs="vintage_data",
-            #     name="prepare_vintage_data_node",
-            # ),
+            node(
+                func=prepare_vintage_data,
+                inputs=[
+                    "revision_history",
+                    "params:options",
+                    # "params:spec_options",
+                ],
+                outputs="vintage_data",
+                name="prepare_vintage_data_node",
+            ),
             node(
                 func=suggest_spec,
                 inputs=[

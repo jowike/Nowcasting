@@ -1,6 +1,4 @@
-import pandas as pd
 import numpy as np
-import os
 import warnings
 
 
@@ -147,6 +145,7 @@ def sort_data(Z, Mnem, Spec):
 
 #     return X, Time, Z
 
+
 def transform_data(Z, Time, Spec):
     """
     Transforms each data series based on Spec.Transformation
@@ -177,27 +176,32 @@ def transform_data(Z, Time, Spec):
 
         assert header[i]== Spec["seriesid"][i]
         series = Spec["seriesname"][i]
+
+        # first_valid_index = np.argwhere(np.isfinite(Z[:, i])).ravel()[0]
         
          # Apply transformations based on formula
         if formula == 'lin':  # Levels (No Transformation)
             X[:, i] = Z[:, i]
         elif formula == 'chg':  # Change (Difference)
-            X[t1:T:step, i] = np.concatenate(([np.nan], Z[(t1+step):T:step, i] - Z[t1:(T-t1):step, i]))
+            # X[(t1-1):T, i] = np.concatenate(([np.nan], Z[(t1-1+step):T, i] - Z[(t1-1):(T-t1), i]))
+            X[(t1-1+step):T, i] = (Z[(t1-1+step):T, i] - Z[(t1-1):(T-t1), i])
         elif formula == 'ch1':  # Year over Year Change (Difference)
             if T > 12:
-                X[(12+t1):T:step, i] = Z[(12+t1):T:step, i] - Z[t1:(T - 12):step, i]
+                X[(12+t1-1):T, i] = Z[(12+t1-1):T, i] - Z[(t1-1):(T - 12), i]
         elif formula == 'pch':  # Percent Change
-            X[t1:T:step, i] = 100 * np.concatenate(
-                ([np.nan], Z[(t1+step):T:step, i] / Z[t1:(T-t1):step, i] - 1)
-            )
+            # X[(t1-1):T, i] = 100 * np.concatenate(
+            #     ([np.nan], Z[(t1-1+step):T, i] / Z[(t1-1):(T-t1), i] - 1)
+            # )
+            X[(t1-1+step):T, i] = 100 * (Z[(t1-1+step):T, i] / Z[(t1-1):(T-t1), i] - 1)
         elif formula == 'pc1':  # Year over Year Percent Change
             if T > 12:
                 # Year over Year Percent Change, handle division by zero
-                X[(12+t1):T:step, i] = 100 * (Z[(12+t1):T:step, i] / Z[t1:(T-12):step, i] - 1)
+                X[(12+t1-1):T, i] = 100 * (Z[(12+t1-1):T, i] / Z[(t1-1):(T-12), i] - 1)
         elif formula == 'pca':  # Percent Change (Annual Rate)
-            X[t1:T:step, i] = 100 * np.concatenate(
-                ([np.nan], (Z[(t1+step):T:step, i] / Z[t1:(T-step):step, i]) ** (1 / n) - 1)
-            )
+            # X[(t1-1):T, i] = 100 * np.concatenate(
+            #     ([np.nan], (Z[(t1-1+step):T, i] / Z[(t1-1):(T-step), i]) ** (1 / n) - 1)
+            # )
+            X[(t1-1+step):T, i] = 100 * ((Z[(t1-1+step):T, i] / Z[(t1-1):(T-step), i]) ** (1 / n) - 1)
         elif formula == 'log':  # Natural Log
             X[:, i] = np.log(Z[:, i])
         else:

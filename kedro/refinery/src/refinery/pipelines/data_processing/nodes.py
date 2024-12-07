@@ -271,8 +271,9 @@ def test_variance(
         x_est = X.drop(columns=tvar(data=X))
 
         to_write = pd.merge(x_est, y, left_index=True, right_index=True, how="right")
+        to_write = to_write.reset_index()
 
-    return to_write.reset_index()
+    return to_write
 
 # TODO: feature selection, stationarity-based filtering, vif fot the case when spec_options are undefined
 def test_stationarity(
@@ -291,8 +292,9 @@ def test_stationarity(
         x_stat = X.drop(columns=tstat(X))
 
         to_write = pd.merge(x_stat, y, left_index=True, right_index=True, how="right")
+        to_write = to_write.reset_index()
 
-    return to_write.reset_index()
+    return to_write
 
 def apply_series_selection(
     ds: pd.DataFrame,
@@ -307,7 +309,7 @@ def apply_series_selection(
         to_write = ds.copy()
     else:
         to_write = mtsfs(ds=ds, series_name=parameters["y_code"], method=parameters["mifs_method"])
-    return to_write
+    return to_write.reset_index()
 
 
 def estimate_ml_models(
