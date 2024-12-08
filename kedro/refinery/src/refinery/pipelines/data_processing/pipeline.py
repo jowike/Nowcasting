@@ -23,7 +23,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs=[
                     "revision_history",
                     "params:options",
-                    # "params:spec_options",
+                    "params:spec_options",
                 ],
                 outputs="vintage_data",
                 name="prepare_vintage_data_node",
@@ -53,7 +53,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "harmonized_data",
                     "ds_spec",
                     "params:options",
-                    # "params:spec_options"
+                    "params:spec_options"
                     ],
                 outputs=[
                     "transformed_aligned_data",
@@ -66,7 +66,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs=[
                     "transformed_aligned_data",
                     "params:options",
-                    # "params:spec_options"
+                    "params:spec_options"
                     ],
                 outputs="transformed_data_var",
                 name="test_variance_node",
@@ -76,7 +76,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs=[
                     "transformed_data_var",
                     "params:options",
-                    # "params:spec_options"
+                    "params:spec_options"
                     ],
                 outputs="transformed_data_stat",
                 name="test_stationarity_node",
@@ -86,7 +86,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs=[
                     "transformed_data_stat",
                     "params:options",
-                    # "params:spec_options"
+                    "params:spec_options"
                     ],
                 outputs="selected_series",
                 name="select_series_node",
