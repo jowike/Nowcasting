@@ -165,6 +165,7 @@ def auto_train_evaluate(ds, ref_date_col, series_name, reference_date, n_periods
         models_results[model_name] = {
             "backcast": pred["y_pred"].drop(reference_date),
             "forecast": pred["y_pred"].loc[reference_date],
+            "reference_date": reference_date
         }
     # Ensure all predictions align with the actuals index
     y_actual = ds.set_index(ref_date_col).loc[T].sort_index()[series_name]
