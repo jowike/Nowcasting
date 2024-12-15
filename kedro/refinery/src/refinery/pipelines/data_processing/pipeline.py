@@ -25,23 +25,23 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "params:options",
                     "params:spec_options",
                 ],
-                outputs="vintage_data",
+                outputs=["vintage_data", "spec"],
                 name="prepare_vintage_data_node",
             ),
-            node(
-                func=suggest_spec,
-                inputs=[
-                    "revision_history",
-                    "params:options",
-                    ],
-                outputs="ds_spec",
-                name="suggest_spec_node",
-            ),
+            # node(
+            #     func=suggest_spec,
+            #     inputs=[
+            #         "revision_history",
+            #         "params:options",
+            #         ],
+            #     outputs="ds_spec",
+            #     name="suggest_spec_node",
+            # ),
             node(
                 func=harmonize_ragged_edges,
                 inputs=[
                     "vintage_data",
-                    "ds_spec",
+                    "spec",
                     "params:options",
                     ],
                 outputs="harmonized_data",
@@ -51,9 +51,9 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=transform_time_series,
                 inputs=[
                     "harmonized_data",
-                    "ds_spec",
+                    "spec",
                     "params:options",
-                    "params:spec_options"
+                    # "params:spec_options"
                     ],
                 outputs=[
                     "transformed_aligned_data",
@@ -65,8 +65,9 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=test_variance,
                 inputs=[
                     "transformed_aligned_data",
+                    "spec",
                     "params:options",
-                    "params:spec_options"
+                    # "params:spec_options"
                     ],
                 outputs="transformed_data_var",
                 name="test_variance_node",
@@ -75,8 +76,9 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=test_stationarity,
                 inputs=[
                     "transformed_data_var",
+                    "spec",
                     "params:options",
-                    "params:spec_options"
+                    # "params:spec_options"
                     ],
                 outputs="transformed_data_stat",
                 name="test_stationarity_node",
@@ -85,21 +87,22 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=apply_series_selection,
                 inputs=[
                     "transformed_data_stat",
+                    "spec",
                     "params:options",
-                    "params:spec_options"
+                    # "params:spec_options"
                     ],
                 outputs="selected_series",
                 name="select_series_node",
             ),
-            node(
-                func=estimate_ml_models,
-                inputs=[
-                    "selected_series",
-                    "params:options"
-                    ],
-                outputs=None,
-                name="estimate_ml_models_node",
-            ),
+            # node(
+            #     func=estimate_ml_models,
+            #     inputs=[
+            #         "selected_series",
+            #         "params:options"
+            #         ],
+            #     outputs=None,
+            #     name="estimate_ml_models_node",
+            # ),
             node(
                 func=estimate_auto_arima,
                 inputs=[
@@ -109,14 +112,14 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs=None,
                 name="estimate_arima_node",
             ),
-            node(
-                func=estimate_var,
-                inputs=[
-                    "selected_series",
-                    "params:options"
-                    ],
-                outputs=None,
-                name="estimate_var_node",
-            ),
+            # node(
+            #     func=estimate_var,
+            #     inputs=[
+            #         "selected_series",
+            #         "params:options"
+            #         ],
+            #     outputs=None,
+            #     name="estimate_var_node",
+            # ),
         ]
     )

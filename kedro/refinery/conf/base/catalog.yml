@@ -16,7 +16,7 @@ vintage_data:
   type: pandas.ParquetDataset
   filepath: data/01_raw/vintage_data.parquet
 
-ds_spec:
+spec:
   type: pandas.CSVDataset
   filepath: data/02_intermediate/variable.csv
 

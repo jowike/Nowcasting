@@ -1,6 +1,6 @@
 import numpy as np
 import warnings
-import numpy as np
+import pandas as pd
 import warnings
 from datetime import datetime
 
@@ -125,3 +125,7 @@ def retransform_(
     return V_final
 
 # Example usage retransform_data(X, Z, Time, Spec, header, datetime(2023, 1, 1))
+
+# def retransform_prediction(transf_series, base_series, Spec, series_name):
+
+#     return R, Time

@@ -1,10 +1,13 @@
 import pandas as pd
 import numpy as np
 from dateutil.relativedelta import relativedelta
-import pmdarima as pm
-from utils import _convert_to_datetime, rmse, mape
+
+from utils import _convert_to_datetime, rmse, mape, cast_spec_to_dict
+from retransform_prediction import retransform_
+from retransform_data import retransform_data
 
 from sklearn.metrics import r2_score
+import pmdarima as pm
 from sklearn.linear_model import LinearRegression, Ridge
 from lineartree import LinearForestRegressor, LinearBoostRegressor
 from statsmodels.tsa.api import VAR
@@ -125,6 +128,33 @@ def select_best_model_by_r2(models_results, y_actual):
         "predictions": models_results[best_model],
     }
 
+def cast_to_base_unit(ds, model_result, spec, series_name):
+    Spec = cast_spec_to_dict(spec.loc[spec["seriesid"] == series_name])
+
+    ## Retransform
+    ds = _convert_to_datetime(ds, ['ReferenceDate'])
+
+    dsrc = ds.set_index('ReferenceDate')
+
+    # def retransform_prediction(transf_series, base_series, Spec, series_name):
+    base_series = dsrc[series_name]
+    header = [series_name]
+
+    backcast = model_result['predictions']['backcast']
+    transf_series = model_result["actual"]
+
+    Time = np.sort(np.unique(np.concatenate((base_series.index.date, backcast.index.date))))
+    cutoff_date = backcast.index.min().date()
+
+    Z = base_series.reindex(Time).to_numpy().reshape(-1,1)
+
+    Yhat = backcast.reindex(Time).to_numpy().reshape(-1,1)
+    Y = transf_series.reindex(Time).to_numpy().reshape(-1,1)
+
+    Rhat = retransform_(X=Yhat, Z=Z, Time=Time, Spec=Spec, header=header, cutoff_date=cutoff_date)
+    R = retransform_data(X=Y, Z=Z, Time=Time, Spec=Spec, header=header, cutoff_date=cutoff_date)
+
+    print(Rhat, R)
 
 def auto_train_evaluate(ds, ref_date_col, series_name, reference_date, n_periods):
     """

@@ -29,7 +29,7 @@ def load_spec(specfile):
     spec = {}
 
     # Fields to extract from the Excel file
-    field_names = ['seriesid', 'seriesname', 'frequency', 'units', 'transformation', 'category']
+    field_names = ['model', 'seriesid', 'seriesname', 'frequency', 'units', 'transformation', 'category']
     for field in field_names:
         if field in raw_data.columns:
             spec[field] = raw_data[field].tolist()

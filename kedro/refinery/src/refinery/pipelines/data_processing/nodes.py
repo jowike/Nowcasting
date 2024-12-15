@@ -5,6 +5,7 @@ sys.path.append("/Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/depen
 import pandas as pd
 import numpy as np
 from itertools import compress
+from typing import List
 
 from sklearn.metrics import r2_score
 
@@ -19,13 +20,14 @@ from load_data import load_data
 from summarize import summarize
 from feature_selection import mtsfs
 from estimation import arima_predict, auto_train_evaluate, var_predict
+from retransform_prediction import retransform_
 
 
 def prepare_vintage_data(
     ds: pd.DataFrame,
     parameters: dict,
     spec_options: dict = None,
-) -> pd.DataFrame:
+) -> List[pd.DataFrame]:
     """
     This function prepares retrospective dataset (vintage data) based on revision history
     """
@@ -35,14 +37,14 @@ def prepare_vintage_data(
 
     if spec_options:
         Spec = load_spec(spec_options["filepath"])
-        SeriesID, SeriesName, Units, UnitsTransformed, Frequency = (
+        seriesid, SeriesName, Units, UnitsTransformed, frequency = (
             Spec["seriesid"],
             Spec["seriesname"],
             Spec["units"],
             Spec["unitstransformed"],
             Spec["frequency"],
         )
-        df = ds.loc[ds[parameters["series_code_col"]].isin(SeriesID)]
+        df = ds.loc[ds[parameters["series_code_col"]].isin(seriesid)]
     else:
         df = ds.loc[
             ds[parameters["freq_desc_col"]].isin(parameters["scope_freq_desc"])
@@ -66,10 +68,15 @@ def prepare_vintage_data(
             series_val_col=parameters["series_val_col"],
         )
     # TODO: preliminary, current-vintage (pseudo-real-time)
-    return df_long
+    spec = suggest_spec(ds, parameters, spec_options)
+    return df_long, spec
 
 
-def suggest_spec(ds: pd.DataFrame, parameters: dict) -> pd.DataFrame:
+def suggest_spec(
+        ds: pd.DataFrame,
+        parameters: dict,
+        spec_options: dict = None
+        ) -> pd.DataFrame:
     """
     Build a standardized specification of variables from the source data.
 
@@ -90,72 +97,77 @@ def suggest_spec(ds: pd.DataFrame, parameters: dict) -> pd.DataFrame:
 
     Returns:
         pd.DataFrame: A DataFrame with the following standardized columns:
-            - "SeriesID"
+            - "seriesid"
             - "SeriesName"
-            - "Frequency"
+            - "frequency"
             - "Transformation"
             - "Units"
             - "Category"
     """
     # Define the output columns
     output_columns = [
-        "SeriesID",
-        "SeriesName",
-        "Frequency",
-        "Transformation",
-        "Units",
-        "Category",
+        "seriesid",
+        "seriesname",
+        "frequency",
+        "transformation",
+        "units",
+        "category",
     ]
+    if spec_options:
+        Spec = load_spec(spec_options["filepath"])
+        Spec.pop("blocknames")
+        output_columns.append("model")
+        df = pd.DataFrame(Spec)
+        return df[output_columns]
+    else:
+        # Filter the source DataFrame based on the specified frequency descriptions
+        df = ds.loc[
+            ds[parameters["freq_desc_col"]].isin(parameters["scope_freq_desc"])
+        ].copy()
 
-    # Filter the source DataFrame based on the specified frequency descriptions
-    df = ds.loc[
-        ds[parameters["freq_desc_col"]].isin(parameters["scope_freq_desc"])
-    ].copy()
-
-    # Select and rename columns
-    renamed_df = (
-        df[
-            [
-                parameters["series_code_col"],
-                parameters["freq_desc_col"],
-                parameters["series_name_col"],
-                parameters["unit_col"],
-                parameters["series_categ_col"],
+        # Select and rename columns
+        renamed_df = (
+            df[
+                [
+                    parameters["series_code_col"],
+                    parameters["freq_desc_col"],
+                    parameters["series_name_col"],
+                    parameters["unit_col"],
+                    parameters["series_categ_col"],
+                ]
             ]
-        ]
-        .drop_duplicates()
-        .rename(
-            columns={
-                parameters["series_code_col"]: "SeriesID",
-                parameters["series_name_col"]: "SeriesName",
-                parameters["unit_col"]: "Units",
-                parameters["series_categ_col"]: "Category",
-            }
+            .drop_duplicates()
+            .rename(
+                columns={
+                    parameters["series_code_col"]: "seriesid",
+                    parameters["series_name_col"]: "seriesname",
+                    parameters["unit_col"]: "units",
+                    parameters["series_categ_col"]: "category",
+                }
+            )
         )
-    )
 
-    # Map frequency descriptions to standardized frequency codes
-    renamed_df["Frequency"] = renamed_df[parameters["freq_desc_col"]].apply(
-        lambda x: "m" if "Monthly" in x else "q" if "Quarterly" in x else None
-    )
+        # Map frequency descriptions to standardized frequency codes
+        renamed_df["frequency"] = renamed_df[parameters["freq_desc_col"]].apply(
+            lambda x: "m" if "Monthly" in x else "q" if "Quarterly" in x else None
+        )
 
-    # Add a default transformation column
-    renamed_df["Transformation"] = [suggest_transformation(unit) for unit in renamed_df["Units"]]
+        # Add a default transformation column
+        renamed_df["transformation"] = [suggest_transformation(unit) for unit in renamed_df["Units"]]
 
-
-    # Return the final DataFrame with standardized columns
-    return renamed_df[output_columns]
+        # Return the final DataFrame with standardized columns
+        return renamed_df[output_columns]
 
 
 
 def harmonize_ragged_edges(
     ds,
-    ds_spec,
+    spec,
     parameters,
 ):
     to_write = pd.DataFrame()
-    for freq_desc in ds_spec["Frequency"].unique():
-        series_codes = ds_spec.loc[ds_spec["Frequency"] == freq_desc]["SeriesID"]
+    for freq_desc in spec["frequency"].unique():
+        series_codes = spec.loc[spec["frequency"] == freq_desc]["seriesid"]
         subset = ds.loc[ds[parameters["series_code_col"]].isin(series_codes)]
         if subset.shape[0]:
             df_f_pivot = subset.pivot(
@@ -179,15 +191,17 @@ def harmonize_ragged_edges(
 
 def transform_time_series(
     ds: pd.DataFrame,
-    ds_spec: pd.DataFrame,
+    spec: pd.DataFrame,
     parameters: dict,
-    spec_options: dict = None,
+    # spec_options: dict = None,
 ):
     if parameters["sample_start"]:
         sample_start = pd.to_datetime(parameters["sample_start"], format="%Y-%m-%d")
+    Spec = cast_spec_to_dict(spec)
 
-    if spec_options:
-        Spec = load_spec(spec_options["filepath"])
+    if "model" in Spec.keys():
+    # if spec_options:
+        # Spec = load_spec(spec_options["filepath"])
 
         X, Time, Z, header = load_data(ds, Spec, sample_start)
 
@@ -213,8 +227,6 @@ def transform_time_series(
             data=Z, columns=header, index=Time
         ).reset_index().rename(columns={"index": parameters["ref_date_col"]})  # Source data (just in cases)
     else:
-        Spec = cast_spec_to_dict(ds_spec)
-
         X, Time, Z, header = load_data(ds, Spec, sample_start)
 
         # summarize data
@@ -241,7 +253,7 @@ def transform_time_series(
         X = X[:, indFin.all(axis=0)]  # Drop all-NaN columns
         x_header = list(compress(x_header, indFin.all(axis=0)))
 
-        Spec = cast_spec_to_dict(ds_spec.loc[ds_spec["SeriesID"].isin(x_header)])
+        Spec = cast_spec_to_dict(spec.loc[spec["seriesid"].isin(x_header)])
 
         summarize(X, Time[~nanLE], Spec)
 
@@ -257,10 +269,14 @@ def transform_time_series(
 
 def test_variance(
     ds: pd.DataFrame,
+    spec: pd.DataFrame,
     parameters: dict,
-    spec_options: dict = None,
+    # spec_options: dict = None,
 ):
-    if spec_options:
+    Spec = cast_spec_to_dict(spec)
+
+    if "model" in Spec.keys():
+    # if spec_options:
         to_write = ds.copy()
     else:
         ds = _convert_to_datetime(ds, [parameters["ref_date_col"]])
@@ -278,10 +294,14 @@ def test_variance(
 # TODO: feature selection, stationarity-based filtering, vif fot the case when spec_options are undefined
 def test_stationarity(
     ds: pd.DataFrame,
+    spec: pd.DataFrame,
     parameters: dict,
-    spec_options: dict = None,
+    # spec_options: dict = None,
 ):
-    if spec_options:
+    Spec = cast_spec_to_dict(spec)
+
+    if "model" in Spec.keys():
+    # if spec_options:
         to_write = ds.copy()
     else:
         ds = _convert_to_datetime(ds, [parameters["ref_date_col"]])
@@ -298,14 +318,18 @@ def test_stationarity(
 
 def apply_series_selection(
     ds: pd.DataFrame,
+    spec: pd.DataFrame,
     parameters: dict,
-    spec_options: dict = None,
+    # spec_options: dict = None,
 ):
     
     ds = _convert_to_datetime(ds, [parameters["ref_date_col"]])
     ds = ds.set_index(parameters["ref_date_col"]).sort_index()
     
-    if spec_options:
+    Spec = cast_spec_to_dict(spec)
+
+    if "model" in Spec.keys():
+    # if spec_options:
         to_write = ds.copy()
     else:
         to_write = mtsfs(ds=ds, series_name=parameters["y_code"], method=parameters["mifs_method"])

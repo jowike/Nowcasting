@@ -73,27 +73,34 @@ def prepare_real_time_vintage_data(
                 .sort_index()
                 .ffill()
             )
+            if series_pivot.index.min().strftime("%Y-%m-%d") >= pub_date_limit:
+                print(f"The observation for {variable_code} was unavailable before {pub_date_limit}.")
+                series = pd.DataFrame({
+                    series_val_col: np.nan,
+                    pub_date_col: np.datetime64('NaT')
+                }, index=series_pivot.columns
+                )
+            else:
+                pivot_limit = series_pivot[series_pivot.index < pub_date_limit]
 
-            pivot_limit = series_pivot[series_pivot.index < pub_date_limit]
+                last_release_dt = (
+                    pivot_limit[min(max(pivot_limit.dropna(how="all", axis=1).columns), ref_date)]
+                    .dropna(how="all")
+                    .last_valid_index()
+                    .strftime("%Y-%m-%d")
+                )
 
-            last_release_dt = (
-                pivot_limit[min(max(pivot_limit.dropna(how="all", axis=1).columns), ref_date)]
-                .dropna(how="all")
-                .last_valid_index()
-                .strftime("%Y-%m-%d")
-            )
+                series = pivot_limit.loc[last_release_dt].to_frame()
+                series = series.loc[
+                    series.first_valid_index() : min(series.last_valid_index(), ref_date)
+                ]
+                series = series.reindex(
+                    sorted(pd.date_range(min(series.index), max(series.index), freq="MS"))
+                )
+                series.columns = [series_val_col]
+                series[pub_date_col] = last_release_dt
 
-            series = pivot_limit.loc[last_release_dt].to_frame()
-            series = series.loc[
-                series.first_valid_index() : min(series.last_valid_index(), ref_date)
-            ]
-            series = series.reindex(
-                sorted(pd.date_range(min(series.index), max(series.index), freq="MS"))
-            )
-
-            series.columns = [series_val_col]
             series[series_code_col] = variable_code
-            series[pub_date_col] = last_release_dt
 
             if series[series_val_col].isnull().any():
                 null_cols.append(variable_code)
