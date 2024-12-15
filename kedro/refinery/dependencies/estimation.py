@@ -12,7 +12,8 @@ from sklearn.linear_model import LinearRegression, Ridge
 from lineartree import LinearForestRegressor, LinearBoostRegressor
 from statsmodels.tsa.api import VAR
 
-def ml_predict(ds, ref_date_col, model, series_name, reference_date, n_periods):
+
+def ml_fit_predict(ds, ref_date_col, model, series_name, reference_date, n_periods):
     reference_date = pd.to_datetime(reference_date, format="%Y-%m-%d")
 
     df = _convert_to_datetime(df=ds, colnames=[ref_date_col])
@@ -53,7 +54,7 @@ def ml_predict(ds, ref_date_col, model, series_name, reference_date, n_periods):
     return to_write, test_dates
 
 
-def arima_predict(ds, ref_date_col, series_name, reference_date, n_periods):
+def arima_fit_predict(ds, ref_date_col, series_name, reference_date, n_periods):
     def __arima_feed(series, h=6):
         series = series.dropna()
         arima_model = pm.auto_arima(series, stepwise=True)
@@ -93,12 +94,71 @@ def arima_predict(ds, ref_date_col, series_name, reference_date, n_periods):
                 to_write,
                 pd.merge(
                     y_pred.rename(columns={series_name: "y_pred"}),
-                    y_test.rename(columns={series_name: "y_actual"}),
+                    y_test.rename(columns={series_name: "actual"}),
                     left_index=True,
                     right_index=True,
                 ),
             ]
         )
+    return to_write
+
+
+def var_fit_predict(ds, ref_date_col, series_name, reference_date, n_periods):
+    reference_date = pd.to_datetime(reference_date, format="%Y-%m-%d")
+
+    df = _convert_to_datetime(df=ds, colnames=[ref_date_col])
+    df = df.set_index(ref_date_col)
+
+    test_dates = pd.to_datetime(
+        [
+            (reference_date - relativedelta(months=i))
+            for i in range(n_periods - 1, -1, -1)
+        ],
+        format="%Y-%m-%d",
+    )
+
+    # cascading model training
+    to_write = pd.DataFrame()
+    for test_date in test_dates:
+        X, y = df.drop(columns=[series_name]), df[series_name]
+
+        train_index, test_index = y.loc[y.index < test_date].index, test_date
+
+        X_train, y_train = X.loc[train_index], y.loc[train_index]
+        X_test, y_test = X.loc[[test_index]], y.loc[[test_index]]
+
+        assert X_test.shape[0] == y_test.shape[0] == 1
+        train_data = pd.merge(X_train, y_train, left_index=True, right_index=True)
+        y_test.index = pd.to_datetime(y_test.index)
+        test_data = pd.merge(X_test, y_test, left_index=True, right_index=True)
+
+        var_model = VAR(train_data)
+        var_fit = var_model.fit(
+            maxlags=1
+        )  # You can adjust the maxlags based on the model's AIC/BIC criteria
+
+        # train_preds = var_fit.fittedvalues
+
+        lag_order = var_fit.k_ar
+        forecast_input = train_data.values[-lag_order:]
+        forecast_output = pd.DataFrame(
+            var_fit.forecast(y=forecast_input, steps=len(test_data)),
+            columns=test_data.columns,
+        )
+
+        to_write = pd.concat(
+            [
+                to_write,
+                pd.DataFrame(
+                    {
+                        "y_pred": forecast_output[series_name].item(),
+                        "actual": y_test.item(),
+                    },
+                    index=[test_date],
+                ),
+            ]
+        )
+
     return to_write
 
 
@@ -128,35 +188,53 @@ def select_best_model_by_r2(models_results, y_actual):
         "predictions": models_results[best_model],
     }
 
+
 def cast_to_base_unit(ds, model_result, spec, series_name):
     Spec = cast_spec_to_dict(spec.loc[spec["seriesid"] == series_name])
 
     ## Retransform
-    ds = _convert_to_datetime(ds, ['ReferenceDate'])
+    ds = _convert_to_datetime(ds, ["ReferenceDate"])
 
-    dsrc = ds.set_index('ReferenceDate')
+    dsrc = ds.set_index("ReferenceDate")
 
     # def retransform_prediction(transf_series, base_series, Spec, series_name):
     base_series = dsrc[series_name]
     header = [series_name]
 
-    backcast = model_result['predictions']['backcast']
+    backcast = model_result["predictions"]["backcast"]
+    forecast = pd.Series(
+        model_result["predictions"]["forecast"],
+        index=[model_result["predictions"]["reference_date"]],
+    )
+
+    transf_pred = pd.concat([backcast, forecast])
+    transf_pred.index = pd.to_datetime(transf_pred.index)
+
     transf_series = model_result["actual"]
 
-    Time = np.sort(np.unique(np.concatenate((base_series.index.date, backcast.index.date))))
-    cutoff_date = backcast.index.min().date()
+    Time = np.sort(
+        np.unique(np.concatenate((base_series.index.date, transf_pred.index.date)))
+    )
+    cutoff_date = transf_pred.index.min().date()
 
-    Z = base_series.reindex(Time).to_numpy().reshape(-1,1)
+    Z = base_series.reindex(Time).to_numpy().reshape(-1, 1)
 
-    Yhat = backcast.reindex(Time).to_numpy().reshape(-1,1)
-    Y = transf_series.reindex(Time).to_numpy().reshape(-1,1)
+    Yhat = transf_pred.reindex(Time).to_numpy().reshape(-1, 1)
+    Y = transf_series.reindex(Time).to_numpy().reshape(-1, 1)
 
-    Rhat = retransform_(X=Yhat, Z=Z, Time=Time, Spec=Spec, header=header, cutoff_date=cutoff_date)
-    R = retransform_data(X=Y, Z=Z, Time=Time, Spec=Spec, header=header, cutoff_date=cutoff_date)
+    Rhat = retransform_(
+        X=Yhat, Z=Z, Time=Time, Spec=Spec, header=header, cutoff_date=cutoff_date
+    )
+    R = retransform_data(
+        X=Y, Z=Z, Time=Time, Spec=Spec, header=header, cutoff_date=cutoff_date
+    )
 
-    print(Rhat, R)
+    return Rhat, R, Time, cutoff_date
 
-def auto_train_evaluate(ds, ref_date_col, series_name, reference_date, n_periods):
+
+def estimate_automl(
+    ds, ds_base, spec, ref_date_col, series_name, reference_date, n_periods
+):
     """
     Automatically trains models, evaluates them, and selects the best one based on R-squared.
 
@@ -184,7 +262,7 @@ def auto_train_evaluate(ds, ref_date_col, series_name, reference_date, n_periods
     models_results = {}
 
     for model_name, model in models.items():
-        pred, T = ml_predict(
+        pred, T = ml_fit_predict(
             ds=ds,
             ref_date_col=ref_date_col,
             model=model,
@@ -195,7 +273,7 @@ def auto_train_evaluate(ds, ref_date_col, series_name, reference_date, n_periods
         models_results[model_name] = {
             "backcast": pred["y_pred"].drop(reference_date),
             "forecast": pred["y_pred"].loc[reference_date],
-            "reference_date": reference_date
+            "reference_date": reference_date,
         }
     # Ensure all predictions align with the actuals index
     y_actual = ds.set_index(ref_date_col).loc[T].sort_index()[series_name]
@@ -214,55 +292,75 @@ def auto_train_evaluate(ds, ref_date_col, series_name, reference_date, n_periods
         predicted=models_results[model_name]["backcast"],
     )
 
+    Rhat, R, Time, cutoff_date = cast_to_base_unit(
+        ds=ds_base, model_result=best_model_info, spec=spec, series_name=series_name
+    )
+    # TBC
+
     return best_model_info
 
 
-def var_predict(ds, ref_date_col, series_name, reference_date, n_periods):
-    reference_date = pd.to_datetime(reference_date, format="%Y-%m-%d")
-
-    df = _convert_to_datetime(df=ds, colnames=[ref_date_col])
-    df = df.set_index(ref_date_col)
-
-    test_dates = pd.to_datetime(
-        [
-            (reference_date - relativedelta(months=i))
-            for i in range(n_periods - 1, -1, -1)
-        ],
-        format="%Y-%m-%d",
+def estimate_var(
+    ds, ds_base, spec, ref_date_col, series_name, reference_date, n_periods
+):
+    var_pred = var_fit_predict(
+        ds=ds,
+        ref_date_col="ReferenceDate",
+        series_name=series_name,
+        reference_date=reference_date,
+        n_periods=n_periods,
     )
+    y_actual = var_pred["actual"]
+    backcast = var_pred["y_pred"].drop(reference_date)
 
-    # cascading model training
-    to_write = pd.DataFrame()
-    for test_date in test_dates:
-        X, y = df.drop(columns=[series_name]), df[series_name]
+    model_info = {
+        "model": "VAR",
+        "r_squared": r2_score(y_true=y_actual.drop(reference_date), y_pred=backcast),
+        "predictions": {
+            "backcast": backcast,
+            "forecast": var_pred["y_pred"].loc[reference_date],
+            "reference_date": reference_date,
+        },
+        "actual": y_actual,
+        "rmse": rmse(actual=y_actual.drop(reference_date), predicted=backcast),
+        "mape": mape(actual=y_actual.drop(reference_date), predicted=backcast),
+    }
+    Rhat, R, Time, cutoff_date = cast_to_base_unit(
+        ds=ds_base, model_result=model_info, spec=spec, series_name=series_name
+    )
+    # TBC
 
-        train_index, test_index = y.loc[y.index < test_date].index, test_date
+    return model_info
 
-        X_train, y_train = X.loc[train_index], y.loc[train_index]
-        X_test, y_test = X.loc[[test_index]], y.loc[[test_index]]
 
-        assert X_test.shape[0] == y_test.shape[0] == 1
-        train_data = pd.merge(X_train, y_train, left_index=True, right_index=True)
-        y_test.index=pd.to_datetime(y_test.index)
-        test_data = pd.merge(X_test, y_test, left_index=True, right_index=True)
+def estimate_arima(
+    ds, ds_base, spec, ref_date_col, series_name, reference_date, n_periods
+):
+    ar_pred = arima_fit_predict(
+        ds=ds,
+        ref_date_col="ReferenceDate",
+        series_name=series_name,
+        reference_date=reference_date,
+        n_periods=n_periods,
+    )
+    y_actual = ar_pred["actual"]
+    backcast = ar_pred["y_pred"].drop(reference_date)
 
-        var_model = VAR(train_data)
-        var_fit = var_model.fit(maxlags=1)  # You can adjust the maxlags based on the model's AIC/BIC criteria
+    model_info = {
+        "model": "ARIMA",
+        "r_squared": r2_score(y_true=y_actual.drop(reference_date), y_pred=backcast),
+        "predictions": {
+            "backcast": backcast,
+            "forecast": ar_pred["y_pred"].loc[reference_date],
+            "reference_date": reference_date,
+        },
+        "actual": y_actual,
+        "rmse": rmse(actual=y_actual.drop(reference_date), predicted=backcast),
+        "mape": mape(actual=y_actual.drop(reference_date), predicted=backcast),
+    }
+    Rhat, R, Time, cutoff_date = cast_to_base_unit(
+        ds=ds_base, model_result=model_info, spec=spec, series_name=series_name
+    )
+    # TBC
 
-        # train_preds = var_fit.fittedvalues
-
-        lag_order = var_fit.k_ar
-        forecast_input = train_data.values[-lag_order:]
-        forecast_output = pd.DataFrame(var_fit.forecast(y=forecast_input, steps=len(test_data)), columns=test_data.columns)
-
-        to_write = pd.concat(
-            [
-                to_write,
-                pd.DataFrame(
-                    {"y_pred": forecast_output[series_name].item(), "y_actual": y_test.item()},
-                    index=[test_date],
-                ),
-            ]
-        )
-
-    return to_write
+    return model_info

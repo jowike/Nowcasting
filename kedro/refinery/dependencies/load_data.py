@@ -17,13 +17,13 @@ def load_data(ds, Spec, sample=None, load_excel=False):
         Time (np.ndarray): T x 1 numeric array, date number with observation dates
         Z (np.ndarray): T x N numeric array, raw (untransformed) dataset
     """
-    print('Loading data...')
+    print("Loading data...")
 
     Z, Time, Mnem = read_data(ds)
 
     # Sort data based on model specification
     Z = sort_data(Z, Mnem, Spec)
-    
+
     # Transform data based on model specification
     X, Time, Z, header = transform_data(Z, Time, Spec)
 
@@ -75,13 +75,13 @@ def sort_data(Z, Mnem, Spec):
     Returns:
         Z (np.ndarray): Sorted data according to Spec.SeriesID
     """
-    in_spec = np.isin(Mnem, Spec['seriesid'])
+    in_spec = np.isin(Mnem, Spec["seriesid"])
     Mnem = [mnem for mnem, keep in zip(Mnem, in_spec) if keep]
     Z = Z[:, in_spec]
 
     # Sort series by ordering of Spec
-    N = len(Spec['seriesid'])
-    permutation = [Mnem.index(spec_id) for spec_id in Spec['seriesid']]
+    N = len(Spec["seriesid"])
+    permutation = [Mnem.index(spec_id) for spec_id in Spec["seriesid"]]
 
     Mnem = [Mnem[i] for i in permutation]
     Z = Z[:, permutation]
@@ -174,38 +174,50 @@ def transform_data(Z, Time, Spec):
         t1 = step
         n = step / 12
 
-        assert header[i]== Spec["seriesid"][i]
+        assert header[i] == Spec["seriesid"][i]
         series = Spec["seriesname"][i]
 
         # first_valid_index = np.argwhere(np.isfinite(Z[:, i])).ravel()[0]
-        
-         # Apply transformations based on formula
-        if formula == 'lin':  # Levels (No Transformation)
+
+        # Apply transformations based on formula
+        if formula == "lin":  # Levels (No Transformation)
             X[:, i] = Z[:, i]
-        elif formula == 'chg':  # Change (Difference)
+        elif formula == "chg":  # Change (Difference)
             # X[(t1-1):T, i] = np.concatenate(([np.nan], Z[(t1-1+step):T, i] - Z[(t1-1):(T-t1), i]))
-            X[(t1-1+step):T, i] = (Z[(t1-1+step):T, i] - Z[(t1-1):(T-t1), i])
-        elif formula == 'ch1':  # Year over Year Change (Difference)
+            X[(t1 - 1 + step) : T, i] = (
+                Z[(t1 - 1 + step) : T, i] - Z[(t1 - 1) : (T - t1), i]
+            )
+        elif formula == "ch1":  # Year over Year Change (Difference)
             if T > 12:
-                X[(12+t1-1):T, i] = Z[(12+t1-1):T, i] - Z[(t1-1):(T - 12), i]
-        elif formula == 'pch':  # Percent Change
+                X[(12 + t1 - 1) : T, i] = (
+                    Z[(12 + t1 - 1) : T, i] - Z[(t1 - 1) : (T - 12), i]
+                )
+        elif formula == "pch":  # Percent Change
             # X[(t1-1):T, i] = 100 * np.concatenate(
             #     ([np.nan], Z[(t1-1+step):T, i] / Z[(t1-1):(T-t1), i] - 1)
             # )
-            X[(t1-1+step):T, i] = 100 * (Z[(t1-1+step):T, i] / Z[(t1-1):(T-t1), i] - 1)
-        elif formula == 'pc1':  # Year over Year Percent Change
+            X[(t1 - 1 + step) : T, i] = 100 * (
+                Z[(t1 - 1 + step) : T, i] / Z[(t1 - 1) : (T - t1), i] - 1
+            )
+        elif formula == "pc1":  # Year over Year Percent Change
             if T > 12:
                 # Year over Year Percent Change, handle division by zero
-                X[(12+t1-1):T, i] = 100 * (Z[(12+t1-1):T, i] / Z[(t1-1):(T-12), i] - 1)
-        elif formula == 'pca':  # Percent Change (Annual Rate)
+                X[(12 + t1 - 1) : T, i] = 100 * (
+                    Z[(12 + t1 - 1) : T, i] / Z[(t1 - 1) : (T - 12), i] - 1
+                )
+        elif formula == "pca":  # Percent Change (Annual Rate)
             # X[(t1-1):T, i] = 100 * np.concatenate(
             #     ([np.nan], (Z[(t1-1+step):T, i] / Z[(t1-1):(T-step), i]) ** (1 / n) - 1)
             # )
-            X[(t1-1+step):T, i] = 100 * ((Z[(t1-1+step):T, i] / Z[(t1-1):(T-step), i]) ** (1 / n) - 1)
-        elif formula == 'log':  # Natural Log
+            X[(t1 - 1 + step) : T, i] = 100 * (
+                (Z[(t1 - 1 + step) : T, i] / Z[(t1 - 1) : (T - step), i]) ** (1 / n) - 1
+            )
+        elif formula == "log":  # Natural Log
             X[:, i] = np.log(Z[:, i])
         else:
-            warnings.warn(f"Transformation '{formula}' not found for {series}. Using untransformed data.")
+            warnings.warn(
+                f"Transformation '{formula}' not found for {series}. Using untransformed data."
+            )
             X[:, i] = Z[:, i]
 
     # Drop first quarter of observations since transformations cause missing values

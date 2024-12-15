@@ -1,6 +1,8 @@
 import sys
 
-sys.path.append("/Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/dependencies/")
+sys.path.append(
+    "/Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/dependencies/"
+)
 
 import pandas as pd
 import numpy as np
@@ -9,7 +11,13 @@ from typing import List
 
 from sklearn.metrics import r2_score
 
-from utils import _convert_to_datetime, cast_spec_to_dict, suggest_transformation, rmse, mape
+from utils import (
+    _convert_to_datetime,
+    cast_spec_to_dict,
+    suggest_transformation,
+    rmse,
+    mape,
+)
 from utils import test_variance as tvar
 from utils import test_stationarity as tstat
 from data_revisions import prepare_real_time_vintage_data
@@ -19,7 +27,7 @@ from remNaNs_spline import remNaNs_spline
 from load_data import load_data
 from summarize import summarize
 from feature_selection import mtsfs
-from estimation import arima_predict, auto_train_evaluate, var_predict
+from estimation import estimate_arima, estimate_automl, estimate_var
 from retransform_prediction import retransform_
 
 
@@ -73,15 +81,13 @@ def prepare_vintage_data(
 
 
 def suggest_spec(
-        ds: pd.DataFrame,
-        parameters: dict,
-        spec_options: dict = None
-        ) -> pd.DataFrame:
+    ds: pd.DataFrame, parameters: dict, spec_options: dict = None
+) -> pd.DataFrame:
     """
     Build a standardized specification of variables from the source data.
 
-    This function filters and processes a DataFrame to create a standardized 
-    specification of variables. It maps columns to consistent names, extracts 
+    This function filters and processes a DataFrame to create a standardized
+    specification of variables. It maps columns to consistent names, extracts
     required information, and applies transformations to generate the final output.
 
     Args:
@@ -153,11 +159,12 @@ def suggest_spec(
         )
 
         # Add a default transformation column
-        renamed_df["transformation"] = [suggest_transformation(unit) for unit in renamed_df["Units"]]
+        renamed_df["transformation"] = [
+            suggest_transformation(unit) for unit in renamed_df["Units"]
+        ]
 
         # Return the final DataFrame with standardized columns
         return renamed_df[output_columns]
-
 
 
 def harmonize_ragged_edges(
@@ -200,7 +207,7 @@ def transform_time_series(
     Spec = cast_spec_to_dict(spec)
 
     if "model" in Spec.keys():
-    # if spec_options:
+        # if spec_options:
         # Spec = load_spec(spec_options["filepath"])
 
         X, Time, Z, header = load_data(ds, Spec, sample_start)
@@ -220,12 +227,16 @@ def transform_time_series(
 
         summarize(X, Time[~nanLE], Spec)
 
-        X_df = pd.DataFrame(
-            x_est, columns=header, index=Time[~nanLE]
-        ).reset_index().rename(columns={"index": parameters["ref_date_col"]})  # Transformed, standarized, imputed data
-        Z_df = pd.DataFrame(
-            data=Z, columns=header, index=Time
-        ).reset_index().rename(columns={"index": parameters["ref_date_col"]})  # Source data (just in cases)
+        X_df = (
+            pd.DataFrame(x_est, columns=header, index=Time[~nanLE])
+            .reset_index()
+            .rename(columns={"index": parameters["ref_date_col"]})
+        )  # Transformed, standarized, imputed data
+        Z_df = (
+            pd.DataFrame(data=Z, columns=header, index=Time)
+            .reset_index()
+            .rename(columns={"index": parameters["ref_date_col"]})
+        )  # Source data (just in cases)
     else:
         X, Time, Z, header = load_data(ds, Spec, sample_start)
 
@@ -235,9 +246,11 @@ def transform_time_series(
         # Prepare data -----------------------------------------------------------
         T, N = X.shape  # Gives dimensions for data input
         indNaN = np.isnan(X)  # Returns location of NaNs
-        rem = np.sum(indNaN, axis=0) > T * 0.8  # Returns columns sum for NaN values. Marks true for rows with more than 80% NaN
+        rem = (
+            np.sum(indNaN, axis=0) > T * 0.8
+        )  # Returns columns sum for NaN values. Marks true for rows with more than 80% NaN
         X = X[:, ~rem]
-        x_header=list(compress(header, ~rem))
+        x_header = list(compress(header, ~rem))
 
         # Mx = np.nanmean(X, axis=0)
         # Wx = np.nanstd(X, axis=0)
@@ -257,15 +270,20 @@ def transform_time_series(
 
         summarize(X, Time[~nanLE], Spec)
 
-        X_df = pd.DataFrame(
-            X, columns=x_header, index=Time[~nanLE]
-        ).reset_index().rename(columns={"index": parameters["ref_date_col"]})  # Transformed, standarized, imputed data
+        X_df = (
+            pd.DataFrame(X, columns=x_header, index=Time[~nanLE])
+            .reset_index()
+            .rename(columns={"index": parameters["ref_date_col"]})
+        )  # Transformed, standarized, imputed data
 
-        Z_df = pd.DataFrame(
-            data=Z, columns=header, index=Time
-        ).reset_index().rename(columns={"index": parameters["ref_date_col"]})  # Source data (just in cases)
+        Z_df = (
+            pd.DataFrame(data=Z, columns=header, index=Time)
+            .reset_index()
+            .rename(columns={"index": parameters["ref_date_col"]})
+        )  # Source data (just in cases)
 
     return X_df, Z_df
+
 
 def test_variance(
     ds: pd.DataFrame,
@@ -276,7 +294,7 @@ def test_variance(
     Spec = cast_spec_to_dict(spec)
 
     if "model" in Spec.keys():
-    # if spec_options:
+        # if spec_options:
         to_write = ds.copy()
     else:
         ds = _convert_to_datetime(ds, [parameters["ref_date_col"]])
@@ -291,6 +309,7 @@ def test_variance(
 
     return to_write
 
+
 # TODO: feature selection, stationarity-based filtering, vif fot the case when spec_options are undefined
 def test_stationarity(
     ds: pd.DataFrame,
@@ -301,7 +320,7 @@ def test_stationarity(
     Spec = cast_spec_to_dict(spec)
 
     if "model" in Spec.keys():
-    # if spec_options:
+        # if spec_options:
         to_write = ds.copy()
     else:
         ds = _convert_to_datetime(ds, [parameters["ref_date_col"]])
@@ -316,33 +335,34 @@ def test_stationarity(
 
     return to_write
 
+
 def apply_series_selection(
     ds: pd.DataFrame,
     spec: pd.DataFrame,
     parameters: dict,
     # spec_options: dict = None,
 ):
-    
     ds = _convert_to_datetime(ds, [parameters["ref_date_col"]])
     ds = ds.set_index(parameters["ref_date_col"]).sort_index()
-    
+
     Spec = cast_spec_to_dict(spec)
 
     if "model" in Spec.keys():
-    # if spec_options:
+        # if spec_options:
         to_write = ds.copy()
     else:
-        to_write = mtsfs(ds=ds, series_name=parameters["y_code"], method=parameters["mifs_method"])
+        to_write = mtsfs(
+            ds=ds, series_name=parameters["y_code"], method=parameters["mifs_method"]
+        )
     return to_write.reset_index()
 
 
-def estimate_ml_models(
-        ds: pd.DataFrame,
-        parameters: dict
-):
+def estimate_ml_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
     # Example usage
-    best_model_result = auto_train_evaluate(
+    best_model_result = estimate_automl(
         ds=ds,
+        ds_base=ds_base,
+        spec=spec,
         ref_date_col=parameters["ref_date_col"],
         series_name=parameters["y_code"],
         reference_date=parameters["ref_date"],
@@ -356,34 +376,40 @@ def estimate_ml_models(
     print(f"RMSE: {best_model_result['rmse']}")
     print(f"Forecast: {best_model_result['predictions']['forecast']}")
 
-def estimate_auto_arima(
-    ds: pd.DataFrame,
-    parameters: dict
-):
-    reference_date = parameters['ref_date']
-    arima_pred = arima_predict(ds=ds, ref_date_col=parameters["ref_date_col"], series_name=parameters["y_code"], reference_date=reference_date, n_periods=72)
-    arima_forecast, arima_backcast = arima_pred["y_pred"].loc[reference_date], arima_pred["y_pred"].drop(reference_date)
-    y_actual, T = arima_pred["y_actual"], arima_backcast.index
+
+def estimate_arima_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
+    model_result = estimate_arima(
+        ds=ds,
+        ds_base=ds_base,
+        spec=spec,
+        ref_date_col=parameters["ref_date_col"],
+        series_name=parameters["y_code"],
+        reference_date=parameters["ref_date"],
+        n_periods=parameters["backcasting_period"],
+    )
 
     # Print the best model's details
-    print(f"Model: ARIMA")
-    print(f"R-Squared: {r2_score(y_true=y_actual.loc[T], y_pred=arima_backcast)}")
-    print(f"MAPE: {mape(actual=y_actual.loc[T], predicted=arima_backcast)}")
-    print(f"RMSE: {rmse(actual=y_actual.loc[T], predicted=arima_backcast)}")
-    print(f"Forecast: {arima_forecast}")
+    print(f"Model: {model_result['model']}")
+    print(f"R-Squared: {model_result['r_squared']}")
+    print(f"MAPE: {model_result['mape']}")
+    print(f"RMSE: {model_result['rmse']}")
+    print(f"Forecast: {model_result['predictions']['forecast']}")
 
-def estimate_var(
-    ds: pd.DataFrame,
-    parameters: dict
-):
-    reference_date = parameters['ref_date']
-    var_pred = var_predict(ds=ds, ref_date_col=parameters["ref_date_col"], series_name=parameters["y_code"], reference_date=reference_date, n_periods=72)
-    var_forecast, var_backcast = var_pred["y_pred"].loc[reference_date], var_pred["y_pred"].drop(reference_date)
-    y_actual, T = var_pred["y_actual"], var_backcast.index
+
+def estimate_var_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
+    model_result = estimate_var(
+        ds=ds,
+        ds_base=ds_base,
+        spec=spec,
+        ref_date_col=parameters["ref_date_col"],
+        series_name=parameters["y_code"],
+        reference_date=parameters["ref_date"],
+        n_periods=parameters["backcasting_period"],
+    )
 
     # Print the best model's details
-    print(f"Model: VAR")
-    print(f"R-Squared: {r2_score(y_true=y_actual.loc[T], y_pred=var_backcast)}")
-    print(f"MAPE: {mape(actual=y_actual.loc[T], predicted=var_backcast)}")
-    print(f"RMSE: {rmse(actual=y_actual.loc[T], predicted=var_backcast)}")
-    print(f"Forecast: {var_forecast}")
+    print(f"Model: {model_result['model']}")
+    print(f"R-Squared: {model_result['r_squared']}")
+    print(f"MAPE: {model_result['mape']}")
+    print(f"RMSE: {model_result['rmse']}")
+    print(f"Forecast: {model_result['predictions']['forecast']}")

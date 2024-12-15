@@ -8,10 +8,9 @@ from .nodes import (
     test_variance,
     test_stationarity,
     apply_series_selection,
-    estimate_ml_models,
-    estimate_auto_arima,
-    estimate_var,
-
+    estimate_ml_node,
+    estimate_arima_node,
+    estimate_var_node,
 )
 
 
@@ -43,7 +42,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "vintage_data",
                     "spec",
                     "params:options",
-                    ],
+                ],
                 outputs="harmonized_data",
                 name="harmonize_ragged_edges_node",
             ),
@@ -54,11 +53,8 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "spec",
                     "params:options",
                     # "params:spec_options"
-                    ],
-                outputs=[
-                    "transformed_aligned_data",
-                    "aligned_non_transformed_data"
-                    ],
+                ],
+                outputs=["transformed_aligned_data", "aligned_non_transformed_data"],
                 name="transform_time_series_node",
             ),
             node(
@@ -68,7 +64,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "spec",
                     "params:options",
                     # "params:spec_options"
-                    ],
+                ],
                 outputs="transformed_data_var",
                 name="test_variance_node",
             ),
@@ -79,7 +75,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "spec",
                     "params:options",
                     # "params:spec_options"
-                    ],
+                ],
                 outputs="transformed_data_stat",
                 name="test_stationarity_node",
             ),
@@ -90,36 +86,42 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "spec",
                     "params:options",
                     # "params:spec_options"
-                    ],
+                ],
                 outputs="selected_series",
                 name="select_series_node",
             ),
-            # node(
-            #     func=estimate_ml_models,
-            #     inputs=[
-            #         "selected_series",
-            #         "params:options"
-            #         ],
-            #     outputs=None,
-            #     name="estimate_ml_models_node",
-            # ),
             node(
-                func=estimate_auto_arima,
+                func=estimate_ml_node,
                 inputs=[
                     "selected_series",
-                    "params:options"
-                    ],
+                    "aligned_non_transformed_data",
+                    "spec",
+                    "params:options",
+                ],
+                outputs=None,
+                name="estimate_ml_models_node",
+            ),
+            node(
+                func=estimate_arima_node,
+                inputs=[
+                    "selected_series",
+                    "aligned_non_transformed_data",
+                    "spec",
+                    "params:options",
+                ],
                 outputs=None,
                 name="estimate_arima_node",
             ),
-            # node(
-            #     func=estimate_var,
-            #     inputs=[
-            #         "selected_series",
-            #         "params:options"
-            #         ],
-            #     outputs=None,
-            #     name="estimate_var_node",
-            # ),
+            node(
+                func=estimate_var_node,
+                inputs=[
+                    "selected_series",
+                    "aligned_non_transformed_data",
+                    "spec",
+                    "params:options",
+                ],
+                outputs=None,
+                name="estimate_var_node",
+            ),
         ]
     )

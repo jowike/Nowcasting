@@ -97,17 +97,28 @@ def retransform_data(
         if formula == "lin":  # Levels (No Transformation)
             V[:, i] = X[:, i][c_idx]
         elif formula == "chg":  # Change (Difference)
-            V[0:T:step, i] = np.cumsum(X[c_idx[0]:H:step, i]) + Z[c_idx[0] - step, i]  # Assuming X[t1-step] is a last historical value
+            V[0:T:step, i] = (
+                np.cumsum(X[c_idx[0] : H : step, i]) + Z[c_idx[0] - step, i]
+            )  # Assuming X[t1-step] is a last historical value
         elif formula == "ch1":
-            V[0:T:step, i] = np.add(Z[c_idx[0]-12:H-12:step, i], X[c_idx[0]:H:step, i])
+            V[0:T:step, i] = np.add(
+                Z[c_idx[0] - 12 : H - 12 : step, i], X[c_idx[0] : H : step, i]
+            )
         elif formula == "pch":  # Percent Change
-            V[0:T:step, i] = np.cumprod(1 + (X[c_idx[0]:H:step, i] / 100)) * Z[c_idx[0] - step, i]  # Assuming X[t1-step] is a last historical value
+            V[0:T:step, i] = (
+                np.cumprod(1 + (X[c_idx[0] : H : step, i] / 100))
+                * Z[c_idx[0] - step, i]
+            )  # Assuming X[t1-step] is a last historical value
         elif formula == "pc1":  # Year over Year Percent Change
             V[0:T:step, i] = np.multiply(
-                1 + (X[c_idx[0]:H:step, i] / 100), Z[c_idx[0]-12:H-12:step, i]
+                1 + (X[c_idx[0] : H : step, i] / 100),
+                Z[c_idx[0] - 12 : H - 12 : step, i],
             )
         elif formula == "pca":  # Percent Change (Annual Rate)
-            V[0:T:step, i] = np.cumprod((1 + X[c_idx[0]:H:step, i] / 100) ** n) * Z[c_idx[0] - step, i]
+            V[0:T:step, i] = (
+                np.cumprod((1 + X[c_idx[0] : H : step, i] / 100) ** n)
+                * Z[c_idx[0] - step, i]
+            )
         elif formula == "log":  # Natural Log
             V[:, i] = np.exp(X[:, i][c_idx])
         else:
@@ -120,5 +131,6 @@ def retransform_data(
         for _ in range(N):
             V_final[:, _] = np.concatenate((Z[: c_idx[0], _], V[:, _]))
     return V_final
+
 
 # Example usage retransform_data(X, Z, Time, Spec, header, datetime(2023, 1, 1))
