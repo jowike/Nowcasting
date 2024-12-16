@@ -52,7 +52,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "harmonized_data",
                     "spec",
                     "params:options",
-                    # "params:spec_options"
                 ],
                 outputs=["transformed_aligned_data", "aligned_non_transformed_data"],
                 name="transform_time_series_node",
@@ -63,7 +62,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "transformed_aligned_data",
                     "spec",
                     "params:options",
-                    # "params:spec_options"
                 ],
                 outputs="transformed_data_var",
                 name="test_variance_node",
@@ -74,7 +72,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "transformed_data_var",
                     "spec",
                     "params:options",
-                    # "params:spec_options"
                 ],
                 outputs="transformed_data_stat",
                 name="test_stationarity_node",
@@ -85,7 +82,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "transformed_data_stat",
                     "spec",
                     "params:options",
-                    # "params:spec_options"
                 ],
                 outputs="selected_series",
                 name="select_series_node",

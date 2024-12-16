@@ -10,6 +10,7 @@ from itertools import compress
 from typing import List
 
 from sklearn.metrics import r2_score
+import os
 
 from utils import (
     _convert_to_datetime,
@@ -27,9 +28,9 @@ from remNaNs_spline import remNaNs_spline
 from load_data import load_data
 from summarize import summarize
 from feature_selection import mtsfs
-from estimation import estimate_arima, estimate_automl, estimate_var
+from estimation import estimate_arima, estimate_automl, estimate_var, cast_to_base_unit
 from retransform_prediction import retransform_
-
+from plots import plot_prediction
 
 def prepare_vintage_data(
     ds: pd.DataFrame,
@@ -160,7 +161,7 @@ def suggest_spec(
 
         # Add a default transformation column
         renamed_df["transformation"] = [
-            suggest_transformation(unit) for unit in renamed_df["Units"]
+            suggest_transformation(unit) for unit in renamed_df["units"]
         ]
 
         # Return the final DataFrame with standardized columns
@@ -359,7 +360,7 @@ def apply_series_selection(
 
 def estimate_ml_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
     # Example usage
-    best_model_result = estimate_automl(
+    model_result = estimate_automl(
         ds=ds,
         ds_base=ds_base,
         spec=spec,
@@ -370,11 +371,53 @@ def estimate_ml_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
     )
 
     # Print the best model's details
-    print(f"Best Model: {best_model_result['best_model']}")
-    print(f"R-Squared: {best_model_result['r_squared']}")
-    print(f"MAPE: {best_model_result['mape']}")
-    print(f"RMSE: {best_model_result['rmse']}")
-    print(f"Forecast: {best_model_result['predictions']['forecast']}")
+    print("============ Model Details ============")
+    print(f"Model                     : {model_result['best_model']}")
+    print(f"R-Squared (R²)            : {model_result['r_squared']:.4f}")
+    print(f"Mean Absolute Percentage Error (MAPE): {model_result['mape']:.2f}%")
+    print(f"Root Mean Square Error (RMSE) : {model_result['rmse']:.4f}")
+
+    formula = spec.loc[spec["seriesid"] == parameters["y_code"]]["transformation"].item()
+    unit = spec.loc[spec["seriesid"] == parameters["y_code"]]["units"].item()
+    reference_date = pd.to_datetime(parameters["ref_date"]).date()
+
+    dt = model_result['predictions']['backcast'].index
+    plot_prediction(
+        dt=dt,
+        y_pred=model_result['predictions']['backcast'],
+        y_actual=model_result['actual'].loc[dt],
+        mode="lines+markers",
+        title=f"Series: {parameters["y_code"]}, Reference Date: {reference_date}, Unit: {unit} {formula}",
+        plt_out_path=os.path.join(parameters["fig_out_dir"], f"{model_result['best_model']}_Predicted_vs_Actual.png")
+        )
+
+
+    Rhat, R, Time, cutoff_date = cast_to_base_unit(ds_base, model_result, spec, parameters["y_code"])
+
+    # TBC
+    header = [parameters["y_code"]]
+    Rhat_df = pd.DataFrame(Rhat, columns=header, index=Time)
+    R_df = pd.DataFrame(R, columns=header, index=Time)
+
+    retr_forecast = Rhat_df.loc[reference_date].item()
+    retr_actual = R_df.loc[reference_date].item()
+
+    print("\n============ Forecast vs Actual ============")
+    print(f"Reference Date            : {reference_date}")
+    print(f"Forecast                  : {model_result['predictions']['forecast']:.4f}")
+    print(f"Forecast (retransformed)  : {retr_forecast:,.2f}")
+    print(f"Actual Release            : {retr_actual:,.2f}")
+    print(f"Percentage Error (Level)  : {(retr_forecast - retr_actual) / retr_actual:.2%}")
+
+    plot_prediction(
+        dt=dt,
+        y_pred=Rhat_df.loc[dt][parameters["y_code"]],
+        y_actual=R_df.loc[dt][parameters["y_code"]],
+        mode="lines+markers",
+        title=f"Series: {parameters["y_code"]}, Reference Date: {reference_date}, Unit: {unit}",
+        plt_out_path=os.path.join(parameters["fig_out_dir"], f"{model_result['best_model']}_Retransformed_Predicted_vs_Actual.png")
+        )
+
 
 
 def estimate_arima_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
@@ -389,11 +432,52 @@ def estimate_arima_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
     )
 
     # Print the best model's details
-    print(f"Model: {model_result['model']}")
-    print(f"R-Squared: {model_result['r_squared']}")
-    print(f"MAPE: {model_result['mape']}")
-    print(f"RMSE: {model_result['rmse']}")
-    print(f"Forecast: {model_result['predictions']['forecast']}")
+    print("============ Model Details ============")
+    print(f"Model                     : {model_result['model']}")
+    print(f"R-Squared (R²)            : {model_result['r_squared']:.4f}")
+    print(f"Mean Absolute Percentage Error (MAPE): {model_result['mape']:.2f}%")
+    print(f"Root Mean Square Error (RMSE) : {model_result['rmse']:.4f}")
+
+    formula = spec.loc[spec["seriesid"] == parameters["y_code"]]["transformation"].item()
+    unit = spec.loc[spec["seriesid"] == parameters["y_code"]]["units"].item()
+    reference_date = pd.to_datetime(parameters["ref_date"]).date()
+
+    dt = model_result['predictions']['backcast'].index
+    plot_prediction(
+        dt=dt,
+        y_pred=model_result['predictions']['backcast'],
+        y_actual=model_result['actual'].loc[dt],
+        mode="lines+markers",
+        title=f"Series: {parameters["y_code"]}, Reference Date: {reference_date}, Unit: {unit} {formula}",
+        plt_out_path=os.path.join(parameters["fig_out_dir"], f"{model_result['model']}_Predicted_vs_Actual.png")
+        )
+
+
+    Rhat, R, Time, cutoff_date = cast_to_base_unit(ds_base, model_result, spec, parameters["y_code"])
+
+    # TBC
+    header = [parameters["y_code"]]
+    Rhat_df = pd.DataFrame(Rhat, columns=header, index=Time)
+    R_df = pd.DataFrame(R, columns=header, index=Time)
+
+    retr_forecast = Rhat_df.loc[reference_date].item()
+    retr_actual = R_df.loc[reference_date].item()
+
+    print("\n============ Forecast vs Actual ============")
+    print(f"Reference Date            : {reference_date}")
+    print(f"Forecast                  : {model_result['predictions']['forecast']:.4f}")
+    print(f"Forecast (retransformed)  : {retr_forecast:,.2f}")
+    print(f"Actual Release            : {retr_actual:,.2f}")
+    print(f"Percentage Error (Level)  : {(retr_forecast - retr_actual) / retr_actual:.2%}")
+
+    plot_prediction(
+        dt=dt,
+        y_pred=Rhat_df.loc[dt][parameters["y_code"]],
+        y_actual=R_df.loc[dt][parameters["y_code"]],
+        mode="lines+markers",
+        title=f"Series: {parameters["y_code"]}, Reference Date: {reference_date}, Unit: {unit}",
+        plt_out_path=os.path.join(parameters["fig_out_dir"], f"{model_result['model']}_Retransformed_Predicted_vs_Actual.png")
+        )
 
 
 def estimate_var_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
@@ -408,8 +492,49 @@ def estimate_var_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
     )
 
     # Print the best model's details
-    print(f"Model: {model_result['model']}")
-    print(f"R-Squared: {model_result['r_squared']}")
-    print(f"MAPE: {model_result['mape']}")
-    print(f"RMSE: {model_result['rmse']}")
-    print(f"Forecast: {model_result['predictions']['forecast']}")
+    print("============ Model Details ============")
+    print(f"Model                     : {model_result['model']}")
+    print(f"R-Squared (R²)            : {model_result['r_squared']:.4f}")
+    print(f"Mean Absolute Percentage Error (MAPE): {model_result['mape']:.2f}%")
+    print(f"Root Mean Square Error (RMSE) : {model_result['rmse']:.4f}")
+
+    formula = spec.loc[spec["seriesid"] == parameters["y_code"]]["transformation"].item()
+    unit = spec.loc[spec["seriesid"] == parameters["y_code"]]["units"].item()
+    reference_date = pd.to_datetime(parameters["ref_date"]).date()
+
+    dt = model_result['predictions']['backcast'].index
+    plot_prediction(
+        dt=dt,
+        y_pred=model_result['predictions']['backcast'],
+        y_actual=model_result['actual'].loc[dt],
+        mode="lines+markers",
+        title=f"Series: {parameters["y_code"]}, Reference Date: {reference_date}, Unit: {unit} {formula}",
+        plt_out_path=os.path.join(parameters["fig_out_dir"], f"{model_result['model']}_Predicted_vs_Actual.png")
+        )
+
+
+    Rhat, R, Time, cutoff_date = cast_to_base_unit(ds_base, model_result, spec, parameters["y_code"])
+
+    # TBC
+    header = [parameters["y_code"]]
+    Rhat_df = pd.DataFrame(Rhat, columns=header, index=Time)
+    R_df = pd.DataFrame(R, columns=header, index=Time)
+
+    retr_forecast = Rhat_df.loc[reference_date].item()
+    retr_actual = R_df.loc[reference_date].item()
+
+    print("\n============ Forecast vs Actual ============")
+    print(f"Reference Date            : {reference_date}")
+    print(f"Forecast                  : {model_result['predictions']['forecast']:.4f}")
+    print(f"Forecast (retransformed)  : {retr_forecast:,.2f}")
+    print(f"Actual Release            : {retr_actual:,.2f}")
+    print(f"Percentage Error (Level)  : {(retr_forecast - retr_actual) / retr_actual:.2%}")
+
+    plot_prediction(
+        dt=dt,
+        y_pred=Rhat_df.loc[dt][parameters["y_code"]],
+        y_actual=R_df.loc[dt][parameters["y_code"]],
+        mode="lines+markers",
+        title=f"Series: {parameters["y_code"]}, Reference Date: {reference_date}, Unit: {unit}",
+        plt_out_path=os.path.join(parameters["fig_out_dir"], f"{model_result['model']}_Retransformed_Predicted_vs_Actual.png")
+        )

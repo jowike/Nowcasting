@@ -40,7 +40,8 @@ def plot_prediction(
     # y_id: str,
     title: str = "",
     mode="markers",
-    tickfont_size=14
+    tickfont_size=14,
+    plt_out_path: str = None
     ) -> None:
     body = [
         # go.Scatter(
@@ -147,7 +148,10 @@ def plot_prediction(
         tickfont_size=tickfont_size,
     )
 
-    fig.show()
+    if plt_out_path:
+        fig.write_image(plt_out_path)
+
+    # fig.show()
     # return fig
 
 

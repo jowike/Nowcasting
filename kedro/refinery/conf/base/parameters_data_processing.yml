@@ -21,4 +21,4 @@ options:
     - Monthly, End of Period
   mifs_method: MRMR
   backcasting_period: 72
-
+  fig_out_dir: data/07_model_output/

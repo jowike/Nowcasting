@@ -211,3 +211,4 @@ def mse(actual: np.ndarray, predicted: np.ndarray):
 def rmse(actual: np.ndarray, predicted: np.ndarray):
     """ Root Mean Squared Error """
     return np.sqrt(mse(actual, predicted))
+
