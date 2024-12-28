@@ -9,9 +9,41 @@ from retransform_data import retransform_data
 from sklearn.metrics import r2_score
 import pmdarima as pm
 from sklearn.linear_model import LinearRegression, Ridge
+from sklearn.ensemble import RandomForestRegressor
 from lineartree import LinearForestRegressor, LinearBoostRegressor
 from statsmodels.tsa.api import VAR
 
+
+def calculate_contributions(coef_, forecast, lag, values):
+
+    var_imp = pd.merge(
+        pd.DataFrame([values], index=["var"]).T,
+        pd.DataFrame(coef_).rename(columns={0: "coef_"}),
+        left_index=True,
+        right_index=True
+    )
+    var_imp["model_imp_"] = var_imp["var"] * var_imp["coef_"]
+
+    # https://math.stackexchange.com/questions/452566/how-to-calculate-weight-of-positive-and-negative-values
+    s = var_imp["model_imp_"]
+    t = s-s.min()+1
+    weights = t / t.sum()
+
+    s_weighted = weights * s
+    s_weighted = s_weighted / np.abs(s_weighted.sum())
+
+    assert np.abs(np.round(s_weighted.sum())) == 1
+
+    var_imp["model_imp_weighted_"] = s_weighted
+    assert (np.sign(var_imp["model_imp_weighted_"]) == np.sign(var_imp["model_imp_"])).all()
+    assert np.isclose(var_imp["model_imp_weighted_"].sum(), 1)
+
+    var_imp["pred_contrib"] = var_imp["model_imp_weighted_"] * np.abs(forecast)
+
+    assert (np.sign(var_imp["pred_contrib"]) == np.sign(var_imp["model_imp_"])).all()
+    assert np.isclose(np.abs(var_imp["pred_contrib"].sum()), forecast)
+
+    return var_imp
 
 def ml_fit_predict(ds, ref_date_col, model, series_name, reference_date, n_periods):
     reference_date = pd.to_datetime(reference_date, format="%Y-%m-%d")
@@ -19,7 +51,7 @@ def ml_fit_predict(ds, ref_date_col, model, series_name, reference_date, n_perio
     df = _convert_to_datetime(df=ds, colnames=[ref_date_col])
     df = df.set_index(ref_date_col)
 
-    test_dates = pd.to_datetime(
+    T = pd.to_datetime(
         [
             (reference_date - relativedelta(months=i))
             for i in range(n_periods - 1, -1, -1)
@@ -28,8 +60,8 @@ def ml_fit_predict(ds, ref_date_col, model, series_name, reference_date, n_perio
     )
 
     # cascading model training
-    to_write = pd.DataFrame()
-    for test_date in test_dates:
+    yhat = pd.DataFrame()
+    for test_date in T:
         X, y = df.drop(columns=[series_name]), df[series_name]
 
         train_index, test_index = y.loc[y.index < test_date].index, test_date
@@ -40,18 +72,29 @@ def ml_fit_predict(ds, ref_date_col, model, series_name, reference_date, n_perio
         assert X_test.shape[0] == y_test.shape[0] == 1
 
         model.fit(X_train, y_train)
+        pred_ = model.predict(X_test)
 
-        to_write = pd.concat(
+        # Coefficients values
+        try:
+            coef_ = pd.Series(model.coef_, index=X_train.columns) 
+        except AttributeError:
+            coef_ = pd.Series(model.feature_importances_, index=X_train.columns) 
+        except ValueError:
+            coef_ = pd.Series(model.base_estimator_.fit(X_train, y_train).coef_[0], index=X_train.columns)
+
+        # TODO: calculate contributions for each forecast
+
+        yhat = pd.concat(
             [
-                to_write,
+                yhat,
                 pd.DataFrame(
-                    {"y_pred": model.predict(X_test), "y_actual": y_test},
+                    {"y_pred": pred_, "y_actual": y_test},
                     index=[test_date],
                 ),
             ]
         )
 
-    return to_write, test_dates
+    return coef_, yhat, T, X_test.squeeze(axis=0)
 
 
 def arima_fit_predict(ds, ref_date_col, series_name, reference_date, n_periods):
@@ -162,7 +205,8 @@ def var_fit_predict(ds, ref_date_col, series_name, reference_date, n_periods):
     return to_write
 
 
-def select_best_model_by_r2(models_results, y_actual):
+
+def select_model_by_r2(models_results, y_actual):
     """
     Selects the best model based on R-squared score.
 
@@ -185,9 +229,10 @@ def select_best_model_by_r2(models_results, y_actual):
     return {
         "best_model": best_model,
         "r_squared": r2_scores[best_model],
-        "predictions": models_results[best_model],
+        "coef_": models_results[best_model].pop('coef_'),
+        "values": models_results[best_model].pop('values'),
+        "pred_": models_results[best_model],
     }
-
 
 def cast_to_base_unit(ds, model_result, spec, series_name):
     Spec = cast_spec_to_dict(spec.loc[spec["seriesid"] == series_name])
@@ -201,10 +246,10 @@ def cast_to_base_unit(ds, model_result, spec, series_name):
     base_series = dsrc[series_name]
     header = [series_name]
 
-    backcast = model_result["predictions"]["backcast"]
+    backcast = model_result["pred_"]["backcast"]
     forecast = pd.Series(
-        model_result["predictions"]["forecast"],
-        index=[model_result["predictions"]["reference_date"]],
+        model_result["pred_"]["forecast"],
+        index=[model_result["pred_"]["reference_date"]],
     )
 
     transf_pred = pd.concat([backcast, forecast])
@@ -257,12 +302,13 @@ def estimate_automl(
         "LinearBoost": LinearBoostRegressor(
             base_estimator=Ridge(), random_state=42, max_features="log2"
         ),
+        "RandomForestRegressor": RandomForestRegressor()
     }
 
     models_results = {}
 
     for model_name, model in models.items():
-        pred, T = ml_fit_predict(
+        coef_, pred, T, values = ml_fit_predict(
             ds=ds,
             ref_date_col=ref_date_col,
             model=model,
@@ -270,34 +316,37 @@ def estimate_automl(
             reference_date=reference_date,
             n_periods=n_periods,
         )
+
         models_results[model_name] = {
             "backcast": pred["y_pred"].drop(reference_date),
             "forecast": pred["y_pred"].loc[reference_date],
             "reference_date": reference_date,
+            "coef_": coef_,
+            "values": values
         }
     # Ensure all predictions align with the actuals index
     y_actual = ds.set_index(ref_date_col).loc[T].sort_index()[series_name]
 
     # Select the best model based on R-squared
-    best_model_info = select_best_model_by_r2(
+    best_model_res= select_model_by_r2(
         models_results, y_actual.drop(reference_date)
     )
-    best_model_info["actual"] = y_actual
-    best_model_info["rmse"] = rmse(
+    best_model_res["actual"] = y_actual
+    best_model_res["rmse"] = rmse(
         actual=y_actual.drop(reference_date),
         predicted=models_results[model_name]["backcast"],
     )
-    best_model_info["mape"] = mape(
+    best_model_res["mape"] = mape(
         actual=y_actual.drop(reference_date),
         predicted=models_results[model_name]["backcast"],
     )
 
-    Rhat, R, Time, cutoff_date = cast_to_base_unit(
-        ds=ds_base, model_result=best_model_info, spec=spec, series_name=series_name
-    )
+    # Rhat, R, Time, cutoff_date = cast_to_base_unit(
+    #     ds=ds_base, model_result=best_model_info, spec=spec, series_name=series_name
+    # )
     # TBC
 
-    return best_model_info
+    return best_model_res
 
 
 def estimate_var(
@@ -316,7 +365,7 @@ def estimate_var(
     model_info = {
         "model": "VAR",
         "r_squared": r2_score(y_true=y_actual.drop(reference_date), y_pred=backcast),
-        "predictions": {
+        "pred_": {
             "backcast": backcast,
             "forecast": var_pred["y_pred"].loc[reference_date],
             "reference_date": reference_date,
@@ -349,7 +398,7 @@ def estimate_arima(
     model_info = {
         "model": "ARIMA",
         "r_squared": r2_score(y_true=y_actual.drop(reference_date), y_pred=backcast),
-        "predictions": {
+        "pred_": {
             "backcast": backcast,
             "forecast": ar_pred["y_pred"].loc[reference_date],
             "reference_date": reference_date,

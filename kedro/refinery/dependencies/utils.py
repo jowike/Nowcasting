@@ -66,7 +66,7 @@ def cast_spec_to_dict(df):
     spec = {}
 
     # Fields to extract from the Excel file
-    field_names = ['seriesid', 'seriesname', 'frequency', 'transformation', 'units', 'category']
+    field_names = ["seriesid", "seriesname", "frequency", "transformation", "units", "category", "model"]
     for field in field_names:
         if field in raw_data.columns:
             spec[field] = raw_data[field].tolist()
