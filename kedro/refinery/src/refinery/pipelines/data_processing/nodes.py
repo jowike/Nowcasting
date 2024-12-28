@@ -373,11 +373,11 @@ def estimate_ml_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
 
     reference_date = pd.to_datetime(parameters["ref_date"]).date()
     lag_date = reference_date-relativedelta(months=1)
-    lag = model_result["pred_"]["backcast"].loc[(reference_date-relativedelta(months=1)).strftime("%Y-%m-%d")]
+    # lag = model_result["pred_"]["backcast"].loc[(reference_date-relativedelta(months=1)).strftime("%Y-%m-%d")]
     pred = model_result['pred_']['forecast']
     coef_ = model_result["coef_"]
     values = model_result["values"]
-    
+
     # Print the best model's details
     print("============ Model Details ============")
     print(f"Model                     : {model_result['best_model']}")
@@ -387,7 +387,7 @@ def estimate_ml_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
     print(f"Mean Absolute Percentage Error (MAPE): {model_result['mape']:.2f}%")
     print(f"Root Mean Square Error (RMSE) : {model_result['rmse']:.4f}")
 
-    print(calculate_contributions(coef_, pred, lag, values))
+    # print(calculate_contributions(coef_, pred, lag, values))
 
     formula = spec.loc[spec["seriesid"] == parameters["y_code"]]["transformation"].item()
     unit = spec.loc[spec["seriesid"] == parameters["y_code"]]["units"].item()
@@ -418,7 +418,7 @@ def estimate_ml_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
 
     print("\n============ Forecast vs Actual ============")
     print(f"Reference Date            : {reference_date}")
-    print(f"Forecast (retransformed)  : {retr_forecast:,.2f}")
+    print(f"Retransformed Forecast    : {retr_forecast:,.2f}")
     print(f"Actual Release            : {retr_actual:,.2f}")
     print(f"Percentage Error (Level)  : {(retr_forecast - retr_actual) / retr_actual:.2%}")
 
@@ -483,7 +483,7 @@ def estimate_arima_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
 
     print("\n============ Forecast vs Actual ============")
     print(f"Reference Date            : {reference_date}")
-    print(f"Forecast (retransformed)  : {retr_forecast:,.2f}")
+    print(f"Retransformed Forecast    : {retr_forecast:,.2f}")
     print(f"Actual Release            : {retr_actual:,.2f}")
     print(f"Percentage Error (Level)  : {(retr_forecast - retr_actual) / retr_actual:.2%}")
 
@@ -545,7 +545,7 @@ def estimate_var_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
 
     print("\n============ Forecast vs Actual ============")
     print(f"Reference Date            : {reference_date}")
-    print(f"Forecast (retransformed)  : {retr_forecast:,.2f}")
+    print(f"Retransformed Forecast    : {retr_forecast:,.2f}")
     print(f"Actual Release            : {retr_actual:,.2f}")
     print(f"Percentage Error (Level)  : {(retr_forecast - retr_actual) / retr_actual:.2%}")
 

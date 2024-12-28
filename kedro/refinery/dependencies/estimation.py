@@ -34,14 +34,17 @@ def calculate_contributions(coef_, forecast, lag, values):
 
     assert np.abs(np.round(s_weighted.sum())) == 1
 
-    var_imp["model_imp_weighted_"] = s_weighted
-    assert (np.sign(var_imp["model_imp_weighted_"]) == np.sign(var_imp["model_imp_"])).all()
-    assert np.isclose(var_imp["model_imp_weighted_"].sum(), 1)
+    var_imp["weight"] = s_weighted
+    assert (np.sign(var_imp["weight"]) == np.sign(var_imp["model_imp_"])).all()
+    assert np.isclose(var_imp["weight"].sum(), 1)
 
-    var_imp["pred_contrib"] = var_imp["model_imp_weighted_"] * np.abs(forecast)
+    var_imp["contrib"] = var_imp["weight"] * np.abs(forecast)
+    assert (np.sign(var_imp["contrib"]) == np.sign(var_imp["model_imp_"])).all()
+    assert np.isclose(np.abs(var_imp["contrib"].sum()), forecast)
 
-    assert (np.sign(var_imp["pred_contrib"]) == np.sign(var_imp["model_imp_"])).all()
-    assert np.isclose(np.abs(var_imp["pred_contrib"].sum()), forecast)
+    # (Forecast	− Actual) × Weight = Impact
+    var_imp["impact"] = (forecast - lag) * var_imp["weight"]
+    assert np.isclose(var_imp["impact"].sum(), (forecast - lag))
 
     return var_imp
 
