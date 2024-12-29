@@ -31,59 +31,65 @@ def convert_to_datetime(df: pd.DataFrame, colnames: List[str]) -> pd.DataFrame:
 def plot_prediction(
     dt: pd.Series,
     y_pred: pd.Series,
-    # lower: pd.Series,
-    # upper: pd.Series,
-    # lower_wide: pd.Series,
-    # upper_wide: pd.Series,
     y_actual: pd.Series,
     legend_position: tuple = (0,0),
     # y_id: str,
     title: str = "",
     mode="markers",
     tickfont_size=14,
+    lower1: pd.Series = None,
+    upper1: pd.Series = None,
+    lower2: pd.Series = None,
+    upper2: pd.Series = None,
     plt_out_path: str = None
     ) -> None:
-    body = [
-        # go.Scatter(
-        #     name="Estimate + 3 Standard Deviations",
-        #     x=dt,
-        #     y=upper_wide,
-        #     mode="lines",
-        #     marker=dict(color="#E7E8F0"),
-        #     line=dict(width=0),
-        #     showlegend=False,
-        # ),
-        # go.Scatter(
-        #     name="Estimate - 3 Standard Deviations",
-        #     x=dt,
-        #     y=lower_wide,
-        #     marker=dict(color="#E7E8F0"),
-        #     line=dict(width=0),
-        #     mode="lines",
-        #     fillcolor="#E7E8F0",
-        #     fill="tonexty",
-        #     showlegend=False,
-        # ),
-        # go.Scatter(
-        #     name="Estimate + Standard Deviation",
-        #     x=dt,
-        #     y=upper,
-        #     mode="lines",
-        #     marker=dict(color="#BDC1D6"),
-        #     line=dict(width=0),
-        #     showlegend=False,
-        # ),
-        # go.Scatter(
-        #     name="Estimate - Standard Deviation",
-        #     x=dt,
-        #     y=lower,
-        #     marker=dict(color="#BDC1D6"),
-        #     line=dict(width=0),
-        #     mode="lines",
-        #     fillcolor="#BDC1D6",
-        #     fill="tonexty",
-        #     showlegend=False,
-        # ),
+
+    body = []
+    if np.all([lower1, lower2, upper1, upper2]):
+        body = [
+            go.Scatter(
+                name="Estimate + 3 Standard Deviations",
+                x=dt,
+                y=upper2,
+                mode="lines",
+                marker=dict(color="#E7E8F0"),
+                line=dict(width=0),
+                showlegend=False,
+            ),
+            go.Scatter(
+                name="Estimate - 3 Standard Deviations",
+                x=dt,
+                y=lower2,
+                marker=dict(color="#E7E8F0"),
+                line=dict(width=0),
+                mode="lines",
+                fillcolor="#E7E8F0",
+                fill="tonexty",
+                showlegend=False,
+            ),
+            go.Scatter(
+                name="Estimate + Standard Deviation",
+                x=dt,
+                y=upper1,
+                mode="lines",
+                marker=dict(color="#BDC1D6"),
+                line=dict(width=0),
+                showlegend=False,
+            ),
+            go.Scatter(
+                name="Estimate - Standard Deviation",
+                x=dt,
+                y=lower1,
+                marker=dict(color="#BDC1D6"),
+                line=dict(width=0),
+                mode="lines",
+                fillcolor="#BDC1D6",
+                fill="tonexty",
+                showlegend=False,
+            ),
+            ]
+
+    body = body + [
         go.Scatter(
             name="Forecast",
             x=dt,
@@ -94,9 +100,6 @@ def plot_prediction(
             marker={"size": 6},
             opacity=0.85,
         ),
-    ]
-
-    body.append(
         go.Scatter(
             name="Actual",
             x=dt,
@@ -106,7 +109,7 @@ def plot_prediction(
             line=dict(color="#000000", width=1.5),  # #7BCC62 / #68b562 / #7BB562
             opacity=0.85,
         )
-    )
+    ]
 
     fig = go.Figure(body)
 
@@ -151,7 +154,7 @@ def plot_prediction(
     if plt_out_path:
         fig.write_image(plt_out_path)
 
-    # fig.show()
+    fig.show()
     # return fig
 
 

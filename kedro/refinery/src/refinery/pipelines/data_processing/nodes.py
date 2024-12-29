@@ -547,7 +547,7 @@ def estimate_var_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
     print(f"Reference Date            : {reference_date}")
     print(f"Retransformed Forecast    : {retr_forecast:,.2f}")
     print(f"Actual Release            : {retr_actual:,.2f}")
-    print(f"Percentage Error (Level)  : {(retr_forecast - retr_actual) / retr_actual:.2%}")
+    print(f"Percentage Error          : {(retr_forecast - retr_actual) / retr_actual:.2%}")
 
     plot_prediction(
         dt=dt,
