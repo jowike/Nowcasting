@@ -154,7 +154,7 @@ def plot_prediction(
     if plt_out_path:
         fig.write_image(plt_out_path)
 
-    fig.show()
+    # fig.show()
     # return fig
 
 

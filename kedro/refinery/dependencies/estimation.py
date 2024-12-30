@@ -14,40 +14,6 @@ from lineartree import LinearForestRegressor, LinearBoostRegressor
 from statsmodels.tsa.api import VAR
 
 
-def calculate_contributions(coef_, forecast, lag, values):
-
-    var_imp = pd.merge(
-        pd.DataFrame([values], index=["var"]).T,
-        pd.DataFrame(coef_).rename(columns={0: "coef_"}),
-        left_index=True,
-        right_index=True
-    )
-    var_imp["model_imp_"] = var_imp["var"] * var_imp["coef_"]
-
-    # https://math.stackexchange.com/questions/452566/how-to-calculate-weight-of-positive-and-negative-values
-    s = var_imp["model_imp_"]
-    t = s-s.min()+1
-    weights = t / t.sum()
-
-    s_weighted = weights * s
-    s_weighted = s_weighted / np.abs(s_weighted.sum())
-
-    assert np.abs(np.round(s_weighted.sum())) == 1
-
-    var_imp["weight"] = s_weighted
-    assert (np.sign(var_imp["weight"]) == np.sign(var_imp["model_imp_"])).all()
-    assert np.isclose(var_imp["weight"].sum(), 1)
-
-    var_imp["contrib"] = var_imp["weight"] * np.abs(forecast)
-    assert (np.sign(var_imp["contrib"]) == np.sign(var_imp["model_imp_"])).all()
-    assert np.isclose(np.abs(var_imp["contrib"].sum()), forecast)
-
-    # (Forecast	− Actual) × Weight = Impact
-    var_imp["impact"] = (forecast - lag) * var_imp["weight"]
-    assert np.isclose(var_imp["impact"].sum(), (forecast - lag))
-
-    return var_imp
-
 def ml_fit_predict(ds, ref_date_col, model, series_name, reference_date, n_periods):
     reference_date = pd.to_datetime(reference_date, format="%Y-%m-%d")
 
@@ -79,11 +45,14 @@ def ml_fit_predict(ds, ref_date_col, model, series_name, reference_date, n_perio
 
         # Coefficients values
         try:
-            coef_ = pd.Series(model.coef_, index=X_train.columns) 
+            coef_ = pd.Series(model.coef_, index=X_train.columns)
         except AttributeError:
-            coef_ = pd.Series(model.feature_importances_, index=X_train.columns) 
+            coef_ = pd.Series(model.feature_importances_, index=X_train.columns)
         except ValueError:
-            coef_ = pd.Series(model.base_estimator_.fit(X_train, y_train).coef_[0], index=X_train.columns)
+            coef_ = pd.Series(
+                model.base_estimator_.fit(X_train, y_train).coef_[0],
+                index=X_train.columns,
+            )
 
         # TODO: calculate contributions for each forecast
 
@@ -208,7 +177,6 @@ def var_fit_predict(ds, ref_date_col, series_name, reference_date, n_periods):
     return to_write
 
 
-
 def select_model_by_r2(models_results, y_actual):
     """
     Selects the best model based on R-squared score.
@@ -232,52 +200,91 @@ def select_model_by_r2(models_results, y_actual):
     return {
         "best_model": best_model,
         "r_squared": r2_scores[best_model],
-        "coef_": models_results[best_model].pop('coef_'),
-        "values": models_results[best_model].pop('values'),
+        "coef_": models_results[best_model].pop("coef_"),
+        "values": models_results[best_model].pop("values"),
         "pred_": models_results[best_model],
     }
 
-def cast_to_base_unit(ds, model_result, spec, series_name):
+
+# def cast_to_base_unit(ds, model_result, spec, series_name):
+#     Spec = cast_spec_to_dict(spec.loc[spec["seriesid"] == series_name])
+
+#     ## Retransform
+#     ds = _convert_to_datetime(ds, ["ReferenceDate"])
+
+#     dsrc = ds.set_index("ReferenceDate")
+
+#     # def retransform_prediction(transf_series, base_series, Spec, series_name):
+#     base_series = dsrc[series_name]
+#     header = [series_name]
+
+#     backcast = model_result["pred_"]["backcast"]
+#     forecast = pd.Series(
+#         model_result["pred_"]["forecast"],
+#         index=[model_result["pred_"]["reference_date"]],
+#     )
+
+#     transf_pred = pd.concat([backcast, forecast])
+#     transf_pred.index = pd.to_datetime(transf_pred.index)
+
+#     transf_series = model_result["actual"]
+
+#     Time = np.sort(
+#         np.unique(np.concatenate((base_series.index.date, transf_pred.index.date)))
+#     )
+#     cutoff_date = transf_pred.index.min().date()
+
+#     Z = base_series.reindex(Time).to_numpy().reshape(-1, 1)
+
+#     Yhat = transf_pred.reindex(Time).to_numpy().reshape(-1, 1)
+#     Y = transf_series.reindex(Time).to_numpy().reshape(-1, 1)
+
+#     Rhat = retransform_(
+#         X=Yhat, Z=Z, Time=Time, Spec=Spec, header=header, cutoff_date=cutoff_date
+#     )
+#     R = retransform_data(
+#         X=Y, Z=Z, Time=Time, Spec=Spec, header=header, cutoff_date=cutoff_date
+#     )
+
+#     return Rhat, R, Time, cutoff_date
+
+
+def cast_to_base_unit(
+        ds, 
+        # model_result, 
+        spec, 
+        series_name,
+        series_values,
+        dtype
+        ):
     Spec = cast_spec_to_dict(spec.loc[spec["seriesid"] == series_name])
-
-    ## Retransform
     ds = _convert_to_datetime(ds, ["ReferenceDate"])
-
     dsrc = ds.set_index("ReferenceDate")
 
-    # def retransform_prediction(transf_series, base_series, Spec, series_name):
     base_series = dsrc[series_name]
     header = [series_name]
-
-    backcast = model_result["pred_"]["backcast"]
-    forecast = pd.Series(
-        model_result["pred_"]["forecast"],
-        index=[model_result["pred_"]["reference_date"]],
-    )
-
-    transf_pred = pd.concat([backcast, forecast])
-    transf_pred.index = pd.to_datetime(transf_pred.index)
-
-    transf_series = model_result["actual"]
-
     Time = np.sort(
-        np.unique(np.concatenate((base_series.index.date, transf_pred.index.date)))
+        np.unique(np.concatenate((base_series.index.date, series_values.index.date)))
     )
-    cutoff_date = transf_pred.index.min().date()
+    cutoff_date = series_values.index.min().date()
 
     Z = base_series.reindex(Time).to_numpy().reshape(-1, 1)
+    Y = series_values.reindex(Time).to_numpy().reshape(-1, 1)
 
-    Yhat = transf_pred.reindex(Time).to_numpy().reshape(-1, 1)
-    Y = transf_series.reindex(Time).to_numpy().reshape(-1, 1)
+    ## Retransform
+    if dtype == "actual":
+        R = retransform_data(
+            X=Y, Z=Z, Time=Time, Spec=Spec, header=header, cutoff_date=cutoff_date
+        )
+    elif dtype == "pred":
+        R = retransform_(
+            X=Y, Z=Z, Time=Time, Spec=Spec, header=header, cutoff_date=cutoff_date
+        )
+    else:
+        raise Exception(f"ValueError: {dtype} not supported")
 
-    Rhat = retransform_(
-        X=Yhat, Z=Z, Time=Time, Spec=Spec, header=header, cutoff_date=cutoff_date
-    )
-    R = retransform_data(
-        X=Y, Z=Z, Time=Time, Spec=Spec, header=header, cutoff_date=cutoff_date
-    )
+    return R, Time, cutoff_date
 
-    return Rhat, R, Time, cutoff_date
 
 
 def estimate_automl(
@@ -305,7 +312,7 @@ def estimate_automl(
         "LinearBoost": LinearBoostRegressor(
             base_estimator=Ridge(), random_state=42, max_features="log2"
         ),
-        "RandomForestRegressor": RandomForestRegressor()
+        "RandomForestRegressor": RandomForestRegressor(),
     }
 
     models_results = {}
@@ -325,15 +332,13 @@ def estimate_automl(
             "forecast": pred["y_pred"].loc[reference_date],
             "reference_date": reference_date,
             "coef_": coef_,
-            "values": values
+            "values": values,
         }
     # Ensure all predictions align with the actuals index
     y_actual = ds.set_index(ref_date_col).loc[T].sort_index()[series_name]
 
     # Select the best model based on R-squared
-    best_model_res= select_model_by_r2(
-        models_results, y_actual.drop(reference_date)
-    )
+    best_model_res = select_model_by_r2(models_results, y_actual.drop(reference_date))
     best_model_res["actual"] = y_actual
     best_model_res["rmse"] = rmse(
         actual=y_actual.drop(reference_date),
@@ -343,11 +348,6 @@ def estimate_automl(
         actual=y_actual.drop(reference_date),
         predicted=models_results[model_name]["backcast"],
     )
-
-    # Rhat, R, Time, cutoff_date = cast_to_base_unit(
-    #     ds=ds_base, model_result=best_model_info, spec=spec, series_name=series_name
-    # )
-    # TBC
 
     return best_model_res
 
@@ -377,10 +377,6 @@ def estimate_var(
         "rmse": rmse(actual=y_actual.drop(reference_date), predicted=backcast),
         "mape": mape(actual=y_actual.drop(reference_date), predicted=backcast),
     }
-    Rhat, R, Time, cutoff_date = cast_to_base_unit(
-        ds=ds_base, model_result=model_info, spec=spec, series_name=series_name
-    )
-    # TBC
 
     return model_info
 
@@ -410,9 +406,49 @@ def estimate_arima(
         "rmse": rmse(actual=y_actual.drop(reference_date), predicted=backcast),
         "mape": mape(actual=y_actual.drop(reference_date), predicted=backcast),
     }
-    Rhat, R, Time, cutoff_date = cast_to_base_unit(
-        ds=ds_base, model_result=model_info, spec=spec, series_name=series_name
-    )
-    # TBC
 
     return model_info
+
+
+def calculate_contributions(coef_, forecast, lag, values):
+    var_imp = pd.merge(
+        pd.DataFrame([values], index=["var"]).T,
+        pd.DataFrame(coef_).rename(columns={0: "coef_"}),
+        left_index=True,
+        right_index=True,
+    )
+    var_imp["model_imp_"] = var_imp["var"] * var_imp["coef_"]
+
+    # https://math.stackexchange.com/questions/452566/how-to-calculate-weight-of-positive-and-negative-values
+    s = var_imp["model_imp_"]
+    t = s - s.min() + 1
+    weights = t / t.sum()
+
+    s_weighted = weights * s
+    s_weighted = s_weighted / np.abs(s_weighted.sum())
+
+    assert np.abs(np.round(s_weighted.sum())) == 1
+
+    var_imp["weight"] = s_weighted
+    assert (np.sign(var_imp["weight"]) == np.sign(var_imp["model_imp_"])).all()
+    assert np.isclose(var_imp["weight"].sum(), 1)
+
+    var_imp["contrib"] = var_imp["weight"] * np.abs(forecast)
+    assert (np.sign(var_imp["contrib"]) == np.sign(var_imp["model_imp_"])).all()
+    assert np.isclose(np.abs(var_imp["contrib"].sum()), forecast)
+
+    # (Forecast	− Actual) × Weight = Impact
+    var_imp["impact"] = (forecast - lag) * var_imp["weight"]
+    assert np.isclose(var_imp["impact"].sum(), (forecast - lag))
+
+    return var_imp
+
+
+def calculate_conf_bounds(pred, actual):
+    # mape_series = np.abs((actual - pred) / actual).expanding(1).mean()
+    # upper = (1+mape_series)*pred
+    # lower = (1-mape_series)*pred
+    std = (actual - pred).shift(1).expanding(2).std().fillna(0)
+    low1, upp1 = pred - std, pred + std
+    low2, upp2 = pred - 3 * std, pred + 3 * std
+    return {"L1": low1, "U1": upp1, "L2": low2, "U2": upp2}
