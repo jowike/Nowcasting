@@ -1,0 +1,5 @@
+setup script:
+    - install dependencies
+    - create / activate pyenv
+        - python -m venv .venv
+        - source .venv/bin/activate
