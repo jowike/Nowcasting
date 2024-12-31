@@ -1,5 +1,5 @@
 spec_options:
-  filepath: data/0_source/Spec_US_example.xls
+  filepath: /Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/data/0_source/Spec_US_example.xls
   country: US
 
 options:
@@ -21,4 +21,4 @@ options:
     - Monthly, End of Period
   mifs_method: MRMR
   backcasting_period: 72
-  fig_out_dir: data/07_model_output/
+  fig_out_dir: /Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/data/07_model_output/

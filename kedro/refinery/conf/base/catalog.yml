@@ -14,15 +14,15 @@ revision_history:
 
 vintage_data:
   type: pandas.ParquetDataset
-  filepath: data/01_raw/vintage_data.parquet
+  filepath: /Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/data/01_raw/vintage_data.parquet
 
 spec:
   type: pandas.CSVDataset
-  filepath: data/02_intermediate/variable.csv
+  filepath: /Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/data/02_intermediate/variable.csv
 
 harmonized_data:
   type: pandas.ExcelDataset
-  filepath: data/02_intermediate/harmonized_time_series.xlsx
+  filepath: /Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/data/02_intermediate/harmonized_time_series.xlsx
   load_args:
     engine: openpyxl
     sheet_name: data
@@ -34,26 +34,26 @@ harmonized_data:
 
 transformed_aligned_data:
   type: pandas.ParquetDataset
-  filepath: data/02_intermediate/transformed_data.parquet
+  filepath: /Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/data/02_intermediate/transformed_data.parquet
     
 aligned_non_transformed_data:
   type: pandas.ParquetDataset
-  filepath: data/02_intermediate/non_transformed_data.parquet
+  filepath: /Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/data/02_intermediate/non_transformed_data.parquet
 
 reduced_transformed_data:
   type: pandas.ParquetDataset
-  filepath: data/02_intermediate/reduced_transformed_data.parquet
+  filepath: /Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/data/02_intermediate/reduced_transformed_data.parquet
 
 transformed_data_stat:
   type: pandas.ParquetDataset
-  filepath: data/02_intermediate/transformed_data_stat.parquet
+  filepath: /Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/data/02_intermediate/transformed_data_stat.parquet
 
 transformed_data_var:
   type: pandas.ParquetDataset
-  filepath: data/02_intermediate/transformed_data_var.parquet
+  filepath: /Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/data/02_intermediate/transformed_data_var.parquet
 
 selected_series:
   type: pandas.ParquetDataset
-  filepath: data/04_feature/selected_series.parquet
+  filepath: /Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/data/04_feature/selected_series.parquet
 
     

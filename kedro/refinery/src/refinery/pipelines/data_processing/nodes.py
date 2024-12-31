@@ -12,14 +12,15 @@ from typing import List
 from sklearn.metrics import r2_score
 import os
 from dateutil.relativedelta import relativedelta
+from datetime import datetime
 
-from utils import (
+from utils_ import (
     _convert_to_datetime,
     cast_spec_to_dict,
     suggest_transformation,
 )
-from utils import test_variance as tvar
-from utils import test_stationarity as tstat
+from utils_ import test_variance as tvar
+from utils_ import test_stationarity as tstat
 from data_revisions import prepare_real_time_vintage_data
 from ragged_edges import shift_to_fill_trailing_nans
 from load_spec import load_spec
@@ -415,10 +416,7 @@ def estimate_ml_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
         lower2=bounds["L2"],
         upper2=bounds["U2"],
         title=f'Series: {parameters["y_code"]}, Reference Date: {reference_date}, Unit: {unit} {formula}',
-        plt_out_path=os.path.join(
-            parameters["fig_out_dir"],
-            f"{model_result['best_model']}_Predicted_vs_Actual.png",
-        ),
+        plt_out_path=os.path.join(parameters["fig_out_dir"], f'{model_result["best_model"]}_{datetime.now().strftime("%Y%m%d%H%M%S")}_pva.png')
     )
 
     transf_pred = pd.concat(
@@ -477,10 +475,7 @@ def estimate_ml_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
         upper2=bounds_level["U2"],
         mode="lines+markers",
         title=f'Series: {parameters["y_code"]}, Reference Date: {reference_date}, Unit: {unit}',
-        plt_out_path=os.path.join(
-            parameters["fig_out_dir"],
-            f"{model_result['best_model']}_Retransformed_Predicted_vs_Actual.png",
-        ),
+        plt_out_path=os.path.join(parameters["fig_out_dir"], f'{model_result["best_model"]}_{datetime.now().strftime("%Y%m%d%H%M%S")}_bpva.png')
     )
 
 
@@ -564,7 +559,7 @@ def estimate_arima_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
         y_actual=R_df.loc[dt][parameters["y_code"]],
         mode="lines+markers",
         title=f'Series: {parameters["y_code"]}, Reference Date: {reference_date}, Unit: {unit}',
-        plt_out_path=os.path.join(parameters["fig_out_dir"], f"{model_result['model']}_Retransformed_Predicted_vs_Actual.png")
+        plt_out_path=os.path.join(parameters["fig_out_dir"], f'{model_result["model"]}_{datetime.now().strftime("%Y%m%d%H%M%S")}_bpva.png')
     )
 
 
@@ -602,7 +597,7 @@ def estimate_var_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
         y_actual=model_result["actual"].loc[dt],
         mode="lines+markers",
         title=f'Series: {parameters["y_code"]}, Reference Date: {reference_date}, Unit: {unit} {formula}',
-        plt_out_path=os.path.join(parameters["fig_out_dir"], f"{model_result['model']}_Predicted_vs_Actual.png")
+        plt_out_path=os.path.join(parameters["fig_out_dir"], f'{model_result["model"]}_{datetime.now().strftime("%Y%m%d%H%M%S")}_pva.png')
     )
 
     transf_pred = pd.concat(
@@ -646,5 +641,5 @@ def estimate_var_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
         y_actual=R_df.loc[dt][parameters["y_code"]],
         mode="lines+markers",
         title=f'Series: {parameters["y_code"]}, Reference Date: {reference_date}, Unit: {unit}',
-        plt_out_path=os.path.join(parameters["fig_out_dir"], f"{model_result['model']}_Retransformed_Predicted_vs_Actual.png")
+        plt_out_path=os.path.join(parameters["fig_out_dir"], f'{model_result["model"]}_{datetime.now().strftime("%Y%m%d%H%M%S")}_bpva.png')
     )
