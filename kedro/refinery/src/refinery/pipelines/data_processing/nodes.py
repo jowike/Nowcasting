@@ -406,18 +406,18 @@ def estimate_ml_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
     actual = model_result["actual"].loc[dt]
     bounds = calculate_conf_bounds(pred, actual)
 
-    plot_prediction(
-        dt=dt,
-        y_pred=pred,
-        y_actual=actual,
-        mode="lines+markers",
-        lower1=bounds["L1"],
-        upper1=bounds["U1"],
-        lower2=bounds["L2"],
-        upper2=bounds["U2"],
-        title=f'Series: {parameters["y_code"]}, Reference Date: {reference_date}, Unit: {unit} {formula}',
-        plt_out_path=os.path.join(parameters["fig_out_dir"], f'{model_result["best_model"]}_{datetime.now().strftime("%Y%m%d%H%M%S")}_pva.png')
-    )
+    # plot_prediction(
+    #     dt=dt,
+    #     y_pred=pred,
+    #     y_actual=actual,
+    #     mode="lines+markers",
+    #     lower1=bounds["L1"],
+    #     upper1=bounds["U1"],
+    #     lower2=bounds["L2"],
+    #     upper2=bounds["U2"],
+    #     title=f'Series: {parameters["y_code"]}, Reference Date: {reference_date}, Unit: {unit} {formula}',
+    #     plt_out_path=os.path.join(parameters["fig_out_dir"], f'{model_result["best_model"]}_{datetime.now().strftime("%Y%m%d%H%M%S")}_pva.png')
+    # )
 
     transf_pred = pd.concat(
         [
@@ -447,7 +447,7 @@ def estimate_ml_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
     retr_actual = R_df.loc[reference_date].item()
     retr_lag = R_df.loc[lag_date].item()
 
-    print(calculate_contributions(coef_, retr_forecast, retr_lag, values))
+    contributions = calculate_contributions(coef_, retr_forecast, retr_lag, values)
 
     print("\n============ Forecast vs Actual ============")
     print(f"Reference Date            : {reference_date}")
@@ -465,18 +465,54 @@ def estimate_ml_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
         tmp = pd.Series(data.reshape(1, -1)[0], index=dt_)
         bounds_level[key] = tmp.loc[dt]
 
-    plot_prediction(
-        dt=dt,
-        y_pred=Rhat_df.loc[dt][parameters["y_code"]],
-        y_actual=R_df.loc[dt][parameters["y_code"]],
-        lower1=bounds_level["L1"],
-        upper1=bounds_level["U1"],
-        lower2=bounds_level["L2"],
-        upper2=bounds_level["U2"],
-        mode="lines+markers",
-        title=f'Series: {parameters["y_code"]}, Reference Date: {reference_date}, Unit: {unit}',
-        plt_out_path=os.path.join(parameters["fig_out_dir"], f'{model_result["best_model"]}_{datetime.now().strftime("%Y%m%d%H%M%S")}_bpva.png')
-    )
+    # plot_prediction(
+    #     dt=dt,
+    #     y_pred=Rhat_df.loc[dt][parameters["y_code"]],
+    #     y_actual=R_df.loc[dt][parameters["y_code"]],
+    #     lower1=bounds_level["L1"],
+    #     upper1=bounds_level["U1"],
+    #     lower2=bounds_level["L2"],
+    #     upper2=bounds_level["U2"],
+    #     mode="lines+markers",
+    #     title=f'Series: {parameters["y_code"]}, Reference Date: {reference_date}, Unit: {unit}',
+    #     plt_out_path=os.path.join(parameters["fig_out_dir"], f'{model_result["best_model"]}_{datetime.now().strftime("%Y%m%d%H%M%S")}_bpva.png')
+    # )
+
+    # Save everything to an Excel file with multiple sheets
+    excel_file = os.path.join(parameters["out_dir"], f"ml.xlsx")
+
+    with pd.ExcelWriter(excel_file, engine="xlsxwriter") as writer:
+        # Save model details as a dataframe
+        sheet1 = (
+            pd.DataFrame.from_dict(
+                {
+                    "Model Name": model_result["best_model"],
+                    "Reference Date": reference_date,
+                    "R-Squared": model_result["r_squared"],
+                    "MAPE": model_result["mape"],
+                    "RMSE": model_result["rmse"],
+                },
+                orient="index",
+                columns=["Value"],
+            )
+            .reset_index()
+            .rename(columns={"index": "Banner"})
+        )
+        sheet1.to_excel(writer, sheet_name="Model Details", index=False)
+        # Save contributions
+        contributions.to_excel(writer, sheet_name="Contributions")
+
+        # Save forecast and actual values
+        R_df = R_df.rename(columns={parameters["y_code"]: "Actual"})
+        Rhat_df = Rhat_df.rename(columns={parameters["y_code"]: "Predicted"})
+        sheet3 = (
+            pd.merge(R_df, Rhat_df, how="outer", left_index=True, right_index=True)
+            .reset_index()
+            .rename(columns={"index": "Reference Date"})
+        )
+        sheet3.to_excel(writer, sheet_name="Forecast vs Actual", index=False)
+
+    print(f"Results saved to {excel_file}")
 
 
 def estimate_arima_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
@@ -507,14 +543,14 @@ def estimate_arima_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
     unit = spec.loc[spec["seriesid"] == parameters["y_code"]]["units"].item()
 
     dt = model_result["pred_"]["backcast"].index
-    plot_prediction(
-        dt=dt,
-        y_pred=model_result["pred_"]["backcast"],
-        y_actual=model_result["actual"].loc[dt],
-        mode="lines+markers",
-        title=f'Series: {parameters["y_code"]}, Reference Date: {reference_date}, Unit: {unit} {formula}',
-        plt_out_path=os.path.join(parameters["fig_out_dir"], f"{model_result['model']}_Predicted_vs_Actual.png")
-    )
+    # plot_prediction(
+    #     dt=dt,
+    #     y_pred=model_result["pred_"]["backcast"],
+    #     y_actual=model_result["actual"].loc[dt],
+    #     mode="lines+markers",
+    #     title=f'Series: {parameters["y_code"]}, Reference Date: {reference_date}, Unit: {unit} {formula}',
+    #     plt_out_path=os.path.join(parameters["fig_out_dir"], f"{model_result['model']}_Predicted_vs_Actual.png")
+    # )
 
     transf_pred = pd.concat(
         [
@@ -553,14 +589,48 @@ def estimate_arima_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
         f"Percentage Error (Level)  : {(retr_forecast - retr_actual) / retr_actual:.2%}"
     )
 
-    plot_prediction(
-        dt=dt,
-        y_pred=Rhat_df.loc[dt][parameters["y_code"]],
-        y_actual=R_df.loc[dt][parameters["y_code"]],
-        mode="lines+markers",
-        title=f'Series: {parameters["y_code"]}, Reference Date: {reference_date}, Unit: {unit}',
-        plt_out_path=os.path.join(parameters["fig_out_dir"], f'{model_result["model"]}_{datetime.now().strftime("%Y%m%d%H%M%S")}_bpva.png')
-    )
+    # plot_prediction(
+    #     dt=dt,
+    #     y_pred=Rhat_df.loc[dt][parameters["y_code"]],
+    #     y_actual=R_df.loc[dt][parameters["y_code"]],
+    #     mode="lines+markers",
+    #     title=f'Series: {parameters["y_code"]}, Reference Date: {reference_date}, Unit: {unit}',
+    #     plt_out_path=os.path.join(parameters["fig_out_dir"], f'{model_result["model"]}_{datetime.now().strftime("%Y%m%d%H%M%S")}_bpva.png')
+    # )
+
+    # Save everything to an Excel file with multiple sheets
+    excel_file = os.path.join(parameters["out_dir"], f"ar.xlsx")
+
+    with pd.ExcelWriter(excel_file, engine="xlsxwriter") as writer:
+        # Save model details as a dataframe
+        sheet1 = (
+            pd.DataFrame.from_dict(
+                {
+                    "Model Name": model_result["model"],
+                    "Reference Date": reference_date,
+                    "R-Squared": model_result["r_squared"],
+                    "MAPE": model_result["mape"],
+                    "RMSE": model_result["rmse"],
+                },
+                orient="index",
+                columns=["Value"],
+            )
+            .reset_index()
+            .rename(columns={"index": "Banner"})
+        )
+        sheet1.to_excel(writer, sheet_name="Model Details", index=False)
+
+        # Save forecast and actual values
+        R_df = R_df.rename(columns={parameters["y_code"]: "Actual"})
+        Rhat_df = Rhat_df.rename(columns={parameters["y_code"]: "Predicted"})
+        sheet2 = (
+            pd.merge(R_df, Rhat_df, how="outer", left_index=True, right_index=True)
+            .reset_index()
+            .rename(columns={"index": "Reference Date"})
+        )
+        sheet2.to_excel(writer, sheet_name="Forecast vs Actual", index=False)
+
+    print(f"Results saved to {excel_file}")
 
 
 def estimate_var_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
@@ -591,14 +661,14 @@ def estimate_var_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
     unit = spec.loc[spec["seriesid"] == parameters["y_code"]]["units"].item()
 
     dt = model_result["pred_"]["backcast"].index
-    plot_prediction(
-        dt=dt,
-        y_pred=model_result["pred_"]["backcast"],
-        y_actual=model_result["actual"].loc[dt],
-        mode="lines+markers",
-        title=f'Series: {parameters["y_code"]}, Reference Date: {reference_date}, Unit: {unit} {formula}',
-        plt_out_path=os.path.join(parameters["fig_out_dir"], f'{model_result["model"]}_{datetime.now().strftime("%Y%m%d%H%M%S")}_pva.png')
-    )
+    # plot_prediction(
+    #     dt=dt,
+    #     y_pred=model_result["pred_"]["backcast"],
+    #     y_actual=model_result["actual"].loc[dt],
+    #     mode="lines+markers",
+    #     title=f'Series: {parameters["y_code"]}, Reference Date: {reference_date}, Unit: {unit} {formula}',
+    #     plt_out_path=os.path.join(parameters["fig_out_dir"], f'{model_result["model"]}_{datetime.now().strftime("%Y%m%d%H%M%S")}_pva.png')
+    # )
 
     transf_pred = pd.concat(
         [
@@ -635,11 +705,45 @@ def estimate_var_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
         f"Percentage Error          : {(retr_forecast - retr_actual) / retr_actual:.2%}"
     )
 
-    plot_prediction(
-        dt=dt,
-        y_pred=Rhat_df.loc[dt][parameters["y_code"]],
-        y_actual=R_df.loc[dt][parameters["y_code"]],
-        mode="lines+markers",
-        title=f'Series: {parameters["y_code"]}, Reference Date: {reference_date}, Unit: {unit}',
-        plt_out_path=os.path.join(parameters["fig_out_dir"], f'{model_result["model"]}_{datetime.now().strftime("%Y%m%d%H%M%S")}_bpva.png')
-    )
+    # plot_prediction(
+    #     dt=dt,
+    #     y_pred=Rhat_df.loc[dt][parameters["y_code"]],
+    #     y_actual=R_df.loc[dt][parameters["y_code"]],
+    #     mode="lines+markers",
+    #     title=f'Series: {parameters["y_code"]}, Reference Date: {reference_date}, Unit: {unit}',
+    #     plt_out_path=os.path.join(parameters["fig_out_dir"], f'{model_result["model"]}_{datetime.now().strftime("%Y%m%d%H%M%S")}_bpva.png')
+    # )
+
+    # Save everything to an Excel file with multiple sheets
+    excel_file = os.path.join(parameters["out_dir"], f"var.xlsx")
+
+    with pd.ExcelWriter(excel_file, engine="xlsxwriter") as writer:
+        # Save model details as a dataframe
+        sheet1 = (
+            pd.DataFrame.from_dict(
+                {
+                    "Model Name": model_result["model"],
+                    "Reference Date": reference_date,
+                    "R-Squared": model_result["r_squared"],
+                    "MAPE": model_result["mape"],
+                    "RMSE": model_result["rmse"],
+                },
+                orient="index",
+                columns=["Value"],
+            )
+            .reset_index()
+            .rename(columns={"index": "Banner"})
+        )
+        sheet1.to_excel(writer, sheet_name="Model Details", index=False)
+
+        # Save forecast and actual values
+        R_df = R_df.rename(columns={parameters["y_code"]: "Actual"})
+        Rhat_df = Rhat_df.rename(columns={parameters["y_code"]: "Predicted"})
+        sheet2 = (
+            pd.merge(R_df, Rhat_df, how="outer", left_index=True, right_index=True)
+            .reset_index()
+            .rename(columns={"index": "Reference Date"})
+        )
+        sheet2.to_excel(writer, sheet_name="Forecast vs Actual", index=False)
+
+    print(f"Results saved to {excel_file}")
