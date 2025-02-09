@@ -437,7 +437,7 @@ def calculate_contributions(coef_, forecast, lag, values):
     assert (np.sign(var_imp["contrib"]) == np.sign(var_imp["model_imp_"])).all()
     assert np.isclose(np.abs(var_imp["contrib"].sum()), forecast)
 
-    # (Forecast	− Actual) × Weight = Impact
+    # (Forecast	− Lag) × Weight = Impact
     var_imp["impact"] = (forecast - lag) * var_imp["weight"]
     assert np.isclose(var_imp["impact"].sum(), (forecast - lag))
 
