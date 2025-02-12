@@ -11,6 +11,7 @@ from .nodes import (
     estimate_ml_node,
     estimate_arima_node,
     estimate_var_node,
+    collect_results
 )
 
 
@@ -94,7 +95,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "spec",
                     "params:options",
                 ],
-                outputs=None,
+                outputs="ml_estimation_results",
                 name="estimate_ml_models_node",
             ),
             node(
@@ -105,7 +106,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "spec",
                     "params:options",
                 ],
-                outputs=None,
+                outputs="ar_estimation_results",
                 name="estimate_arima_node",
             ),
             node(
@@ -116,8 +117,22 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "spec",
                     "params:options",
                 ],
-                outputs=None,
+                outputs="var_estimation_results",
                 name="estimate_var_node",
+            ),
+            node(
+                func=collect_results,
+                inputs=[
+                    "spec",
+                    "revision_history",
+                    "aligned_non_transformed_data",
+                    "params:options",
+                    "ar_estimation_results",
+                    "ml_estimation_results",
+                    "var_estimation_results"
+                ],
+                outputs="dash_data_model",
+                name="collect_results",
             ),
         ]
     )

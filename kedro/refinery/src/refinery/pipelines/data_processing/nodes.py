@@ -127,12 +127,14 @@ def suggest_spec(
         "transformation",
         "units",
         "category",
+        "region"
     ]
     if spec_options:
         Spec = load_spec(spec_options["filepath"])
         Spec.pop("blocknames")
         output_columns.append("model")
         df = pd.DataFrame(Spec)
+        df = df.rename(columns={parameters["region_col"]: "region"})
         return df[output_columns]
     else:
         # Filter the source DataFrame based on the specified frequency descriptions
@@ -149,6 +151,7 @@ def suggest_spec(
                     parameters["series_name_col"],
                     parameters["unit_col"],
                     parameters["series_categ_col"],
+                    parameters["region_col"],
                 ]
             ]
             .drop_duplicates()
@@ -158,6 +161,7 @@ def suggest_spec(
                     parameters["series_name_col"]: "seriesname",
                     parameters["unit_col"]: "units",
                     parameters["series_categ_col"]: "category",
+                    parameters["region_col"]: "region",
                 }
             )
         )
@@ -386,13 +390,13 @@ def estimate_ml_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
     values = model_result["values"]
 
     # Print the best model's details
-    print("============ Model Details ============")
-    print(f"Model                     : {model_result['best_model']}")
-    print(f"Reference Date            : {reference_date}")
-    print(f"Forecast                  : {pred:.4f}")
-    print(f"R-Squared (R²)            : {model_result['r_squared']:.4f}")
-    print(f"Mean Absolute Percentage Error (MAPE): {model_result['mape']:.2f}%")
-    print(f"Root Mean Square Error (RMSE) : {model_result['rmse']:.4f}")
+    # print("============ Model Details ============")
+    # print(f"Model                     : {model_result['best_model']}")
+    # print(f"Reference Date            : {reference_date}")
+    # print(f"Forecast                  : {pred:.4f}")
+    # print(f"R-Squared (R²)            : {model_result['r_squared']:.4f}")
+    # print(f"Mean Absolute Percentage Error (MAPE): {model_result['mape']:.2f}%")
+    # print(f"Root Mean Square Error (RMSE) : {model_result['rmse']:.4f}")
 
     # print(calculate_contributions(coef_, pred, lag, values))
 
@@ -449,13 +453,13 @@ def estimate_ml_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
 
     contributions = calculate_contributions(coef_, retr_forecast, retr_lag, values)
 
-    print("\n============ Forecast vs Actual ============")
-    print(f"Reference Date            : {reference_date}")
-    print(f"Retransformed Forecast    : {retr_forecast:,.2f}")
-    print(f"Actual Release            : {retr_actual:,.2f}")
-    print(
-        f"Percentage Error (Level)  : {(retr_forecast - retr_actual) / retr_actual:.2%}"
-    )
+    # print("\n============ Forecast vs Actual ============")
+    # print(f"Reference Date            : {reference_date}")
+    # print(f"Retransformed Forecast    : {retr_forecast:,.2f}")
+    # print(f"Actual Release            : {retr_actual:,.2f}")
+    # print(
+    #     f"Percentage Error (Level)  : {(retr_forecast - retr_actual) / retr_actual:.2%}"
+    # )
 
     bounds_level = {}
     for key, value in bounds.items():
@@ -464,6 +468,8 @@ def estimate_ml_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
         )
         tmp = pd.Series(data.reshape(1, -1)[0], index=dt_)
         bounds_level[key] = tmp.loc[dt]
+    bounds_level["Predicted"] = Rhat_df.loc[dt][parameters["y_code"]]  # retransformed backcast
+    retransformed_actual = R_df.loc[dt][parameters["y_code"]]  # retransformed actual
 
     # plot_prediction(
     #     dt=dt,
@@ -479,7 +485,7 @@ def estimate_ml_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
     # )
 
     # Save everything to an Excel file with multiple sheets
-    excel_file = os.path.join(parameters["out_dir"], f"ml.xlsx")
+    excel_file = os.path.join(parameters["model_output_directory"], parameters["ml_report_filename"])
 
     with pd.ExcelWriter(excel_file, engine="xlsxwriter") as writer:
         # Save model details as a dataframe
@@ -487,10 +493,11 @@ def estimate_ml_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
             pd.DataFrame.from_dict(
                 {
                     "Model Name": model_result["best_model"],
+                    "Series Code": parameters["y_code"],
                     "Reference Date": reference_date,
-                    "R-Squared": model_result["r_squared"],
-                    "MAPE": model_result["mape"],
-                    "RMSE": model_result["rmse"],
+                    "R-Squared": model_result['r_squared'],
+                    "MAPE": (retr_forecast - retr_actual) / retr_actual,
+                    "RMSE": f"{model_result['rmse']:.4f}",
                 },
                 orient="index",
                 columns=["Value"],
@@ -502,6 +509,9 @@ def estimate_ml_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
         # Save contributions
         contributions.to_excel(writer, sheet_name="Contributions")
 
+        # Save confidence bounds
+        pd.DataFrame(bounds_level).to_excel(writer, sheet_name="Confidence Bounds")
+
         # Save forecast and actual values
         R_df = R_df.rename(columns={parameters["y_code"]: "Actual"})
         Rhat_df = Rhat_df.rename(columns={parameters["y_code"]: "Predicted"})
@@ -512,7 +522,7 @@ def estimate_ml_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
         )
         sheet3.to_excel(writer, sheet_name="Forecast vs Actual", index=False)
 
-    print(f"Results saved to {excel_file}")
+    # print(f"Results saved to {excel_file}")
 
 
 def estimate_arima_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
@@ -529,13 +539,13 @@ def estimate_arima_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
     reference_date = pd.to_datetime(parameters["ref_date"]).date()
 
     # Print the best model's details
-    print("============ Model Details ============")
-    print(f"Model                     : {model_result['model']}")
-    print(f"Reference Date            : {reference_date}")
-    print(f"Forecast                  : {model_result['pred_']['forecast']:.4f}")
-    print(f"R-Squared (R²)            : {model_result['r_squared']:.4f}")
-    print(f"Mean Absolute Percentage Error (MAPE): {model_result['mape']:.2f}%")
-    print(f"Root Mean Square Error (RMSE) : {model_result['rmse']:.4f}")
+    # print("============ Model Details ============")
+    # print(f"Model                     : {model_result['model']}")
+    # print(f"Reference Date            : {reference_date}")
+    # print(f"Forecast                  : {model_result['pred_']['forecast']:.4f}")
+    # print(f"R-Squared (R²)            : {model_result['r_squared']:.4f}")
+    # print(f"Mean Absolute Percentage Error (MAPE): {model_result['mape']:.2f}%")
+    # print(f"Root Mean Square Error (RMSE) : {model_result['rmse']:.4f}")
 
     formula = spec.loc[spec["seriesid"] == parameters["y_code"]][
         "transformation"
@@ -543,10 +553,15 @@ def estimate_arima_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
     unit = spec.loc[spec["seriesid"] == parameters["y_code"]]["units"].item()
 
     dt = model_result["pred_"]["backcast"].index
+    pred = model_result["pred_"]["backcast"]
+    actual = model_result["actual"].loc[dt]
+
+    bounds = calculate_conf_bounds(pred, actual)
+
     # plot_prediction(
     #     dt=dt,
-    #     y_pred=model_result["pred_"]["backcast"],
-    #     y_actual=model_result["actual"].loc[dt],
+    #     y_pred=pred,
+    #     y_actual=actual,
     #     mode="lines+markers",
     #     title=f'Series: {parameters["y_code"]}, Reference Date: {reference_date}, Unit: {unit} {formula}',
     #     plt_out_path=os.path.join(parameters["fig_out_dir"], f"{model_result['model']}_Predicted_vs_Actual.png")
@@ -581,13 +596,24 @@ def estimate_arima_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
 
     reference_date = pd.to_datetime(parameters["ref_date"]).date()
 
-    print("\n============ Forecast vs Actual ============")
-    print(f"Reference Date            : {reference_date}")
-    print(f"Retransformed Forecast    : {retr_forecast:,.2f}")
-    print(f"Actual Release            : {retr_actual:,.2f}")
-    print(
-        f"Percentage Error (Level)  : {(retr_forecast - retr_actual) / retr_actual:.2%}"
-    )
+    # print("\n============ Forecast vs Actual ============")
+    # print(f"Reference Date            : {reference_date}")
+    # print(f"Retransformed Forecast    : {retr_forecast:,.2f}")
+    # print(f"Actual Release            : {retr_actual:,.2f}")
+    # print(
+    #     f"Percentage Error (Level)  : {(retr_forecast - retr_actual) / retr_actual:.2%}"
+    # )
+
+    # calculate confidence bounds
+    bounds_level = {}
+    for key, value in bounds.items():
+        data, dt_, _ = cast_to_base_unit(
+            ds_base, spec, parameters["y_code"], value, dtype="pred"
+        )
+        tmp = pd.Series(data.reshape(1, -1)[0], index=dt_)
+        bounds_level[key] = tmp.loc[dt]
+    bounds_level["Predicted"] = Rhat_df.loc[dt][parameters["y_code"]]  # retransformed backcast
+    retransformed_actual = R_df.loc[dt][parameters["y_code"]]  # retransformed actual
 
     # plot_prediction(
     #     dt=dt,
@@ -599,7 +625,7 @@ def estimate_arima_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
     # )
 
     # Save everything to an Excel file with multiple sheets
-    excel_file = os.path.join(parameters["out_dir"], f"ar.xlsx")
+    excel_file = os.path.join(parameters["model_output_directory"], parameters["ar_report_filename"])
 
     with pd.ExcelWriter(excel_file, engine="xlsxwriter") as writer:
         # Save model details as a dataframe
@@ -607,10 +633,11 @@ def estimate_arima_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
             pd.DataFrame.from_dict(
                 {
                     "Model Name": model_result["model"],
+                    "Series Code": parameters["y_code"],
                     "Reference Date": reference_date,
-                    "R-Squared": model_result["r_squared"],
-                    "MAPE": model_result["mape"],
-                    "RMSE": model_result["rmse"],
+                    "R-Squared": model_result['r_squared'],
+                    "MAPE": ((bounds_level["Predicted"] - retransformed_actual) / retransformed_actual).mean(),
+                    "RMSE": f"{model_result['rmse']:.4f}",
                 },
                 orient="index",
                 columns=["Value"],
@@ -630,7 +657,11 @@ def estimate_arima_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
         )
         sheet2.to_excel(writer, sheet_name="Forecast vs Actual", index=False)
 
-    print(f"Results saved to {excel_file}")
+        # Save confidence bounds
+        pd.DataFrame(bounds_level).to_excel(writer, sheet_name="Confidence Bounds")
+
+
+    # print(f"Results saved to {excel_file}")
 
 
 def estimate_var_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
@@ -646,14 +677,13 @@ def estimate_var_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
 
     reference_date = pd.to_datetime(parameters["ref_date"]).date()
 
-    # Print the best model's details
-    print("============ Model Details ============")
-    print(f"Model                     : {model_result['model']}")
-    print(f"Reference Date            : {reference_date}")
-    print(f"Forecast                  : {model_result['pred_']['forecast']:.4f}")
-    print(f"R-Squared (R²)            : {model_result['r_squared']:.4f}")
-    print(f"Mean Absolute Percentage Error (MAPE): {model_result['mape']:.2f}%")
-    print(f"Root Mean Square Error (RMSE) : {model_result['rmse']:.4f}")
+    # print("============ Model Details ============")
+    # print(f"Model                     : {model_result['model']}")
+    # print(f"Reference Date            : {reference_date}")
+    # print(f"Forecast                  : {model_result['pred_']['forecast']:.4f}")
+    # print(f"R-Squared (R²)            : {model_result['r_squared']:.4f}")
+    # print(f"Mean Absolute Percentage Error (MAPE): {model_result['mape']:.2f}%")
+    # print(f"Root Mean Square Error (RMSE) : {model_result['rmse']:.4f}")
 
     formula = spec.loc[spec["seriesid"] == parameters["y_code"]][
         "transformation"
@@ -661,10 +691,15 @@ def estimate_var_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
     unit = spec.loc[spec["seriesid"] == parameters["y_code"]]["units"].item()
 
     dt = model_result["pred_"]["backcast"].index
+    pred = model_result["pred_"]["backcast"]
+    actual = model_result["actual"].loc[dt]
+
+    bounds = calculate_conf_bounds(pred, actual)
+
     # plot_prediction(
     #     dt=dt,
-    #     y_pred=model_result["pred_"]["backcast"],
-    #     y_actual=model_result["actual"].loc[dt],
+    #     y_pred=pred,
+    #     y_actual=actual,
     #     mode="lines+markers",
     #     title=f'Series: {parameters["y_code"]}, Reference Date: {reference_date}, Unit: {unit} {formula}',
     #     plt_out_path=os.path.join(parameters["fig_out_dir"], f'{model_result["model"]}_{datetime.now().strftime("%Y%m%d%H%M%S")}_pva.png')
@@ -697,13 +732,24 @@ def estimate_var_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
     retr_forecast = Rhat_df.loc[reference_date].item()
     retr_actual = R_df.loc[reference_date].item()
 
-    print("\n============ Forecast vs Actual ============")
-    print(f"Reference Date            : {reference_date}")
-    print(f"Retransformed Forecast    : {retr_forecast:,.2f}")
-    print(f"Actual Release            : {retr_actual:,.2f}")
-    print(
-        f"Percentage Error          : {(retr_forecast - retr_actual) / retr_actual:.2%}"
-    )
+    # print("\n============ Forecast vs Actual ============")
+    # print(f"Reference Date            : {reference_date}")
+    # print(f"Retransformed Forecast    : {retr_forecast:,.2f}")
+    # print(f"Actual Release            : {retr_actual:,.2f}")
+    # print(
+    #     f"Percentage Error          : {(retr_forecast - retr_actual) / retr_actual:.2%}"
+    # )
+
+    # calculate confidence bounds
+    bounds_level = {}
+    for key, value in bounds.items():
+        data, dt_, _ = cast_to_base_unit(
+            ds_base, spec, parameters["y_code"], value, dtype="pred"
+        )
+        tmp = pd.Series(data.reshape(1, -1)[0], index=dt_)
+        bounds_level[key] = tmp.loc[dt]
+    bounds_level["Predicted"] = Rhat_df.loc[dt][parameters["y_code"]]  # retransformed backcast
+    retransformed_actual = R_df.loc[dt][parameters["y_code"]]  # retransformed actual
 
     # plot_prediction(
     #     dt=dt,
@@ -715,7 +761,7 @@ def estimate_var_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
     # )
 
     # Save everything to an Excel file with multiple sheets
-    excel_file = os.path.join(parameters["out_dir"], f"var.xlsx")
+    excel_file = os.path.join(parameters["model_output_directory"], parameters["var_report_filename"])
 
     with pd.ExcelWriter(excel_file, engine="xlsxwriter") as writer:
         # Save model details as a dataframe
@@ -723,10 +769,11 @@ def estimate_var_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
             pd.DataFrame.from_dict(
                 {
                     "Model Name": model_result["model"],
+                    "Series Code": parameters["y_code"],
                     "Reference Date": reference_date,
-                    "R-Squared": model_result["r_squared"],
-                    "MAPE": model_result["mape"],
-                    "RMSE": model_result["rmse"],
+                    "R-Squared": model_result['r_squared'],
+                    "MAPE": ((bounds_level["Predicted"] - retransformed_actual) / retransformed_actual).mean(),
+                    "RMSE": f"{model_result['rmse']:.4f}",
                 },
                 orient="index",
                 columns=["Value"],
@@ -746,4 +793,175 @@ def estimate_var_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
         )
         sheet2.to_excel(writer, sheet_name="Forecast vs Actual", index=False)
 
-    print(f"Results saved to {excel_file}")
+        # Save confidence bounds
+        pd.DataFrame(bounds_level).to_excel(writer, sheet_name="Confidence Bounds")
+
+    # print(f"Results saved to {excel_file}")
+
+def collect_results(variable, vintagedata, ts, parameters, s1, s2, s3):
+
+    vintagedata[parameters["ref_date_col"]] = pd.to_datetime(vintagedata[parameters["ref_date_col"]])
+
+    ar_xl = pd.ExcelFile(os.path.join(parameters["model_output_directory"], parameters["ar_report_filename"]))
+    ar_sheets = {}
+    for sheet_name in ar_xl.sheet_names:
+        ar_sheets[sheet_name] = ar_xl.parse(sheet_name) 
+
+    var_xl = pd.ExcelFile(os.path.join(parameters["model_output_directory"], parameters["var_report_filename"]))
+    var_sheets = {}
+    for sheet_name in var_xl.sheet_names:
+        var_sheets[sheet_name] = var_xl.parse(sheet_name)
+
+    ml_xl = pd.ExcelFile(os.path.join(parameters["model_output_directory"], parameters["ml_report_filename"]))
+    ml_sheets = {}
+    for sheet_name in ml_xl.sheet_names:
+        ml_sheets[sheet_name] = ml_xl.parse(sheet_name) 
+
+    to_write = {}
+
+    # Cards
+    contents = []
+
+    # ARIMA
+    reference_date = ar_sheets["Model Details"].loc[ar_sheets["Model Details"]["Banner"] == "Reference Date"]["Value"].item()
+    forecast = ar_sheets["Forecast vs Actual"].loc[ar_sheets["Forecast vs Actual"]["Reference Date"] == reference_date]["Predicted"].item()
+    lag = ar_sheets["Forecast vs Actual"].loc[ar_sheets["Forecast vs Actual"]["Reference Date"] == reference_date - relativedelta(months=1)]["Actual"].item()
+
+    width = (ar_sheets['Confidence Bounds']["Predicted"] - ar_sheets['Confidence Bounds']["L1"]).tail(12).mean()
+
+    contents.append({
+        "Card": ar_sheets["Model Details"].loc[ar_sheets["Model Details"]["Banner"] == "Model Name"]["Value"].item(),
+        "Value": forecast,
+        "Since Last Month": (forecast - lag) / lag,
+        "Prediction Range": width,
+    })
+
+    # VAR
+    reference_date = var_sheets["Model Details"].loc[var_sheets["Model Details"]["Banner"] == "Reference Date"]["Value"].item()
+    forecast = var_sheets["Forecast vs Actual"].loc[var_sheets["Forecast vs Actual"]["Reference Date"] == reference_date]["Predicted"].item()
+    lag = var_sheets["Forecast vs Actual"].loc[var_sheets["Forecast vs Actual"]["Reference Date"] == reference_date - relativedelta(months=1)]["Actual"].item()
+
+    width = (var_sheets['Confidence Bounds']["Predicted"] - var_sheets['Confidence Bounds']["L1"]).tail(12).mean()
+
+    contents.append({
+        "Card": var_sheets["Model Details"].loc[var_sheets["Model Details"]["Banner"] == "Model Name"]["Value"].item(),
+        "Value": forecast,
+        "Since Last Month": (forecast - lag) / lag,
+        "Prediction Range": width,
+    })
+
+    # ML
+    reference_date = ml_sheets["Model Details"].loc[ml_sheets["Model Details"]["Banner"] == "Reference Date"]["Value"].item()
+    forecast = ml_sheets["Forecast vs Actual"].loc[ml_sheets["Forecast vs Actual"]["Reference Date"] == reference_date]["Predicted"].item()
+    lag = ml_sheets["Forecast vs Actual"].loc[ml_sheets["Forecast vs Actual"]["Reference Date"] == reference_date - relativedelta(months=1)]["Actual"].item()
+
+    width = (ml_sheets['Confidence Bounds']["Predicted"] - ml_sheets['Confidence Bounds']["L1"]).tail(12).mean()
+
+    contents.append({
+        "Card": "Confidence Interval",
+        "Value": width,
+        "Since Last Month": (forecast - lag) / lag,
+        "Prediction Range": ""
+    })
+
+    to_write["Cards"] = pd.DataFrame(contents)
+
+
+    # Nowcast Browser – Header
+    reference_date = ml_sheets["Model Details"].loc[ml_sheets["Model Details"]["Banner"] == "Reference Date"]["Value"].item()
+    forecast = ml_sheets["Forecast vs Actual"].loc[ml_sheets["Forecast vs Actual"]["Reference Date"] == reference_date]["Predicted"].item()
+    lag = ml_sheets["Forecast vs Actual"].loc[ml_sheets["Forecast vs Actual"]["Reference Date"] == reference_date - relativedelta(months=1)]["Actual"].item()
+    series_code = ml_sheets["Model Details"].loc[ml_sheets["Model Details"]["Banner"] == "Series Code"]["Value"].item()
+    LastUpdatedOnSource = pd.to_datetime(vintagedata["LastUpdatedOnSource"]).max()
+
+    contents = {
+        "Value": forecast,
+        "Since Last Month": (forecast - lag) / lag,
+        "Series Name": variable.loc[variable["seriesid"] == series_code]["seriesname"].item(),
+        "Series Code": series_code,
+        "Reference Period": f"{reference_date.strftime('%b')} 1 - {reference_date.strftime('%b')} {pd.Period(reference_date.strftime('%Y-%m')).days_in_month}",
+        "Region": variable.loc[variable["seriesid"] == series_code]["region"].item(),
+        "Unit": variable.loc[variable["seriesid"] == series_code]["units"].item(),
+        "Last Run Watermark": datetime.now().strftime('%d/%m/%Y %H:%M'),
+        "Data as of": LastUpdatedOnSource.strftime('%d/%m/%Y %H:%M'),
+        }
+
+    to_write["Nowcast Browser – Header"] = pd.DataFrame.from_dict(contents, orient="index").reset_index().rename(columns={"index": "Banner", 0: "Value"})
+
+
+    # Nowcast Browser – Base
+
+    reference_date = ml_sheets["Model Details"].loc[ml_sheets["Model Details"]["Banner"] == "Reference Date"]["Value"].item()
+
+    traces = ml_sheets["Forecast vs Actual"].loc[
+        (ml_sheets["Forecast vs Actual"]["Reference Date"] >= (reference_date - relativedelta(months=18))) &\
+        (ml_sheets["Forecast vs Actual"]["Reference Date"] <= reference_date)
+            ]
+
+    to_write["Nowcast Browser – Base"] = traces
+
+
+    # Local Explanation
+    reference_date = ml_sheets["Model Details"].loc[ml_sheets["Model Details"]["Banner"] == "Reference Date"]["Value"].item()
+    lag_date = reference_date - relativedelta(months=1)
+    forecast = ml_sheets["Forecast vs Actual"].loc[ml_sheets["Forecast vs Actual"]["Reference Date"] == reference_date]["Predicted"].item()
+    lag = ml_sheets["Forecast vs Actual"].loc[ml_sheets["Forecast vs Actual"]["Reference Date"] == reference_date - relativedelta(months=1)]["Actual"].item()
+
+    impact_assessment = ml_sheets["Contributions"][["Unnamed: 0", "impact"]].rename(columns={"Unnamed: 0": "Series ID", "impact": "Impact"})
+
+    values = ts.loc[ts[parameters["ref_date_col"]] == lag_date][list(impact_assessment["Series ID"])]
+    values.index = ["Actual"]
+
+    impact_assessment = impact_assessment.merge(values.T.reset_index().rename(columns={"index": "Series ID"}), how="left", on="Series ID")
+    impact_assessment["Impact"] = impact_assessment["Impact"].map(lambda x: "{:.2f}".format(x))
+    impact_assessment["Actual"] = impact_assessment["Actual"].map(lambda x: "{:,.2f}".format(x))
+    actuals = vintagedata.loc[
+        (vintagedata[parameters["series_code_col"]].isin(list(impact_assessment["Series ID"]))) &\
+        (vintagedata[parameters["ref_date_col"]] == lag_date)
+        ][[parameters["series_code_col"], "Description", parameters["ref_date_col"], "LastUpdatedOnSource"]].groupby(
+            [parameters["series_code_col"], "Description", parameters["ref_date_col"]]
+            ).min().reset_index().rename(
+            columns={parameters["series_code_col"]: "Series ID", "Description": "Data Series", "LastUpdatedOnSource": "Release Date"}
+            )
+
+
+    impact_assessment = impact_assessment.merge(
+        actuals,
+        on="Series ID",
+        how="left"
+    )
+    # impact_assessment["Release Date"] = pd.to_datetime(impact_assessment["Release Date"]).dt.strftime('%b-%d')
+
+    to_write["Local Explanation"] = impact_assessment[["Release Date", "Series ID", "Data Series", "Actual", "Impact"]]
+
+
+    #  Global Explanation
+    series_code = ml_sheets["Model Details"].loc[ml_sheets["Model Details"]["Banner"] == "Series Code"]["Value"].item()
+    reference_date = ml_sheets["Model Details"].loc[ml_sheets["Model Details"]["Banner"] == "Reference Date"]["Value"].item()
+    df = ts.set_index(parameters["ref_date_col"])[list(impact_assessment["Series ID"])+[series_code]]
+
+    # Melt wide DataFrame to long format
+    df_long = df.sort_index().loc[
+        reference_date-relativedelta(months=6):reference_date
+        ].reset_index().melt(
+            id_vars=[parameters["ref_date_col"]], var_name='Variable Code', value_name='Variable Value'
+            )
+
+    to_write["Global Explanation"] = df_long
+
+
+    # Model Assessment
+    df = ml_sheets["Model Details"].loc[ml_sheets["Model Details"]["Banner"].isin(["R-Squared", "MAPE"])].rename(columns={"Banner": "Measure"})
+    df["Measure"] = df["Measure"].replace({
+        "R-Squared": "Adjusted R-Squared",
+        "MAPE": "Average Error Rate"
+    })
+
+
+    to_write["Model Assessment"] = df
+
+    excel_file = os.path.join(parameters["reporting_directory"], parameters["out_report_filename"])
+
+    with pd.ExcelWriter(excel_file, engine="xlsxwriter") as writer:
+        for sheet_name, contents in to_write.items():
+            contents.to_excel(writer, sheet_name=sheet_name, index=False)

@@ -7,7 +7,7 @@
 
 
 spec_options:
-  filepath: /Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/data/0_source/Spec_US_example.xls
+  filepath: /Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/data/0_source/Spec_US_example.xlsx
   country: US
 
 options:
@@ -23,10 +23,16 @@ options:
   freq_desc_col: FrequencyDescription
   unit_col: Unit
   series_categ_col: Category
+  region_col: Region
   scope_freq_desc:
     - Monthly
     - Quarterly
     - Monthly, End of Period
   mifs_method: MRMR
   backcasting_period: 72
-  out_dir: /Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/data/07_model_output/
+  model_output_directory: /Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/data/07_model_output/
+  reporting_directory: /Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/data/08_reporting/
+  ar_report_filename: ar.xlsx
+  var_report_filename: var.xlsx
+  ml_report_filename: ml.xlsx
+  out_report_filename: dash_data_model.xlsx
