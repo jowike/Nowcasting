@@ -522,7 +522,7 @@ def estimate_ml_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
         )
         sheet3.to_excel(writer, sheet_name="Forecast vs Actual", index=False)
 
-    # print(f"Results saved to {excel_file}")
+    return f"Results saved to {excel_file}"
 
 
 def estimate_arima_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
@@ -661,7 +661,7 @@ def estimate_arima_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
         pd.DataFrame(bounds_level).to_excel(writer, sheet_name="Confidence Bounds")
 
 
-    # print(f"Results saved to {excel_file}")
+    return f"Results saved to {excel_file}"
 
 
 def estimate_var_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
@@ -796,7 +796,7 @@ def estimate_var_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
         # Save confidence bounds
         pd.DataFrame(bounds_level).to_excel(writer, sheet_name="Confidence Bounds")
 
-    # print(f"Results saved to {excel_file}")
+    return f"Results saved to {excel_file}"
 
 def collect_results(variable, vintagedata, ts, parameters, s1, s2, s3):
 
@@ -897,7 +897,7 @@ def collect_results(variable, vintagedata, ts, parameters, s1, s2, s3):
         (ml_sheets["Forecast vs Actual"]["Reference Date"] >= (reference_date - relativedelta(months=18))) &\
         (ml_sheets["Forecast vs Actual"]["Reference Date"] <= reference_date)
             ]
-
+    traces.loc[(traces["Reference Date"] == reference_date), "Actual"] = None
     to_write["Nowcast Browser – Base"] = traces
 
 
@@ -965,3 +965,4 @@ def collect_results(variable, vintagedata, ts, parameters, s1, s2, s3):
     with pd.ExcelWriter(excel_file, engine="xlsxwriter") as writer:
         for sheet_name, contents in to_write.items():
             contents.to_excel(writer, sheet_name=sheet_name, index=False)
+    return f"Results saved to {excel_file}"

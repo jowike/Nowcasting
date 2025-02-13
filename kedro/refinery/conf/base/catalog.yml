@@ -56,16 +56,18 @@ selected_series:
   type: pandas.ParquetDataset
   filepath: /Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/data/04_feature/selected_series.parquet
 
-# ar_estimation_results:
-#   type: kedro_datasets.text.TextDataset
-#   filepath: /Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/data/07_reporting/ar_node_completion_logs.txt
+ar_estimation_results:
+  type: kedro_datasets.text.TextDataset
+  filepath: /Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/data/07_model_output/ar_node_completion_logs.txt
 
-# vr_estimation_results:
-#   type: kedro_datasets.text.TextDataset
-#   filepath: /Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/data/07_reporting/var_node_completion_logs.txt
+vr_estimation_results:
+  type: kedro_datasets.text.TextDataset
+  filepath: /Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/data/07_model_output/var_node_completion_logs.txt
 
-# ml_estimation_results:
-#   type: kedro_datasets.text.TextDataset
-#   filepath: /Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/data/07_reporting/ml_node_completion_logs.txt
+ml_estimation_results:
+  type: kedro_datasets.text.TextDataset
+  filepath: /Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/data/07_model_output/ml_node_completion_logs.txt
 
-    
+dash_data_model:
+  type: kedro_datasets.text.TextDataset
+  filepath: /Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/data/08_reporting/pipeline_completion_logs.txt
