@@ -516,7 +516,7 @@ def estimate_ml_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
         R_df = R_df.rename(columns={parameters["y_code"]: "Actual"})
         Rhat_df = Rhat_df.rename(columns={parameters["y_code"]: "Predicted"})
         sheet3 = (
-            pd.merge(R_df, Rhat_df, how="outer", left_index=True, right_index=True)
+            pd.merge(Rhat_df, R_df, how="outer", left_index=True, right_index=True)
             .reset_index()
             .rename(columns={"index": "Reference Date"})
         )
@@ -651,7 +651,7 @@ def estimate_arima_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
         R_df = R_df.rename(columns={parameters["y_code"]: "Actual"})
         Rhat_df = Rhat_df.rename(columns={parameters["y_code"]: "Predicted"})
         sheet2 = (
-            pd.merge(R_df, Rhat_df, how="outer", left_index=True, right_index=True)
+            pd.merge(Rhat_df, R_df, how="outer", left_index=True, right_index=True)
             .reset_index()
             .rename(columns={"index": "Reference Date"})
         )
@@ -787,7 +787,7 @@ def estimate_var_node(ds: pd.DataFrame, ds_base, spec, parameters: dict):
         R_df = R_df.rename(columns={parameters["y_code"]: "Actual"})
         Rhat_df = Rhat_df.rename(columns={parameters["y_code"]: "Predicted"})
         sheet2 = (
-            pd.merge(R_df, Rhat_df, how="outer", left_index=True, right_index=True)
+            pd.merge(Rhat_df, R_df, how="outer", left_index=True, right_index=True)
             .reset_index()
             .rename(columns={"index": "Reference Date"})
         )
@@ -909,16 +909,29 @@ def collect_results(variable, vintagedata, ts, parameters, s1, s2, s3):
 
     impact_assessment = ml_sheets["Contributions"][["Unnamed: 0", "impact"]].rename(columns={"Unnamed: 0": "Series ID", "impact": "Impact"})
 
-    values = ts.loc[ts[parameters["ref_date_col"]] == lag_date][list(impact_assessment["Series ID"])]
-    values.index = ["Actual"]
+    # values = ts.loc[ts[parameters["ref_date_col"]] == lag_date][list(impact_assessment["Series ID"])]
+    # values.index = ["Actual"]
 
-    impact_assessment = impact_assessment.merge(values.T.reset_index().rename(columns={"index": "Series ID"}), how="left", on="Series ID")
+    # impact_assessment = impact_assessment.merge(values.T.reset_index().rename(columns={"index": "Series ID"}), how="left", on="Series ID")
     impact_assessment["Impact"] = impact_assessment["Impact"].map(lambda x: "{:.2f}".format(x))
-    impact_assessment["Actual"] = impact_assessment["Actual"].map(lambda x: "{:,.2f}".format(x))
-    actuals = vintagedata.loc[
+    # impact_assessment["Actual"] = impact_assessment["Actual"].map(lambda x: "{:,.2f}".format(x))
+    # actuals = vintagedata.loc[
+    #     (vintagedata[parameters["series_code_col"]].isin(list(impact_assessment["Series ID"]))) &\
+    #     (vintagedata[parameters["ref_date_col"]] == lag_date)
+    #     ][[parameters["series_code_col"], "Description", parameters["ref_date_col"], "LastUpdatedOnSource"]].groupby(
+    #         [parameters["series_code_col"], "Description", parameters["ref_date_col"]]
+    #         ).min().reset_index().rename(
+    #         columns={parameters["series_code_col"]: "Series ID", "Description": "Data Series", "LastUpdatedOnSource": "Release Date"}
+    #         )
+
+    tmp = vintagedata.loc[
         (vintagedata[parameters["series_code_col"]].isin(list(impact_assessment["Series ID"]))) &\
-        (vintagedata[parameters["ref_date_col"]] == lag_date)
-        ][[parameters["series_code_col"], "Description", parameters["ref_date_col"], "LastUpdatedOnSource"]].groupby(
+        (vintagedata[parameters["ref_date_col"]] <= reference_date)
+        ]
+
+    actuals = tmp.merge(
+        tmp.groupby([parameters["series_code_col"]]).agg({parameters["ref_date_col"]: "max"}).reset_index(), on=[parameters["series_code_col"], parameters["ref_date_col"]]
+        )[[parameters["series_code_col"], "Description", parameters["ref_date_col"], "LastUpdatedOnSource"]].groupby(
             [parameters["series_code_col"], "Description", parameters["ref_date_col"]]
             ).min().reset_index().rename(
             columns={parameters["series_code_col"]: "Series ID", "Description": "Data Series", "LastUpdatedOnSource": "Release Date"}
@@ -932,13 +945,14 @@ def collect_results(variable, vintagedata, ts, parameters, s1, s2, s3):
     )
     # impact_assessment["Release Date"] = pd.to_datetime(impact_assessment["Release Date"]).dt.strftime('%b-%d')
 
-    to_write["Local Explanation"] = impact_assessment[["Release Date", "Series ID", "Data Series", "Actual", "Impact"]]
+    to_write["Local Explanation"] = impact_assessment[["Release Date", "Series ID", "Data Series", "Impact"]]
 
 
     #  Global Explanation
     series_code = ml_sheets["Model Details"].loc[ml_sheets["Model Details"]["Banner"] == "Series Code"]["Value"].item()
     reference_date = ml_sheets["Model Details"].loc[ml_sheets["Model Details"]["Banner"] == "Reference Date"]["Value"].item()
     df = ts.set_index(parameters["ref_date_col"])[list(impact_assessment["Series ID"])+[series_code]]
+    df.loc[reference_date, series_code] = None
 
     # Melt wide DataFrame to long format
     df_long = df.sort_index().loc[
