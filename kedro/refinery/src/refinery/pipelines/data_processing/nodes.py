@@ -127,12 +127,12 @@ def suggest_spec(
         "transformation",
         "units",
         "category",
-        "region"
+        "region",
+        "model"
     ]
     if spec_options:
         Spec = load_spec(spec_options["filepath"])
         Spec.pop("blocknames")
-        output_columns.append("model")
         df = pd.DataFrame(Spec)
         df = df.rename(columns={parameters["region_col"]: "region"})
         return df[output_columns]
@@ -175,6 +175,7 @@ def suggest_spec(
         renamed_df["transformation"] = [
             suggest_transformation(unit) for unit in renamed_df["units"]
         ]
+        renamed_df["model"] = np.nan
 
         # Return the final DataFrame with standardized columns
         return renamed_df[output_columns]
@@ -219,7 +220,7 @@ def transform_time_series(
         sample_start = pd.to_datetime(parameters["sample_start"], format="%Y-%m-%d")
     Spec = cast_spec_to_dict(spec)
 
-    if "model" in Spec.keys():
+    if not np.isnan(Spec["model"]).all():
         # if spec_options:
         # Spec = load_spec(spec_options["filepath"])
 
@@ -306,7 +307,7 @@ def test_variance(
 ):
     Spec = cast_spec_to_dict(spec)
 
-    if "model" in Spec.keys():
+    if not np.isnan(Spec["model"]).all():
         # if spec_options:
         to_write = ds.copy()
     else:
@@ -332,7 +333,7 @@ def test_stationarity(
 ):
     Spec = cast_spec_to_dict(spec)
 
-    if "model" in Spec.keys():
+    if not np.isnan(Spec["model"]).all():
         # if spec_options:
         to_write = ds.copy()
     else:
@@ -360,7 +361,7 @@ def apply_series_selection(
 
     Spec = cast_spec_to_dict(spec)
 
-    if "model" in Spec.keys():
+    if not np.isnan(Spec["model"]).all():
         # if spec_options:
         to_write = ds.copy()
     else:
@@ -913,7 +914,7 @@ def collect_results(variable, vintagedata, ts, parameters, s1, s2, s3):
     # values.index = ["Actual"]
 
     # impact_assessment = impact_assessment.merge(values.T.reset_index().rename(columns={"index": "Series ID"}), how="left", on="Series ID")
-    impact_assessment["Impact"] = impact_assessment["Impact"].map(lambda x: "{:.2f}".format(x))
+    # impact_assessment["Impact"] = impact_assessment["Impact"]
     # impact_assessment["Actual"] = impact_assessment["Actual"].map(lambda x: "{:,.2f}".format(x))
     # actuals = vintagedata.loc[
     #     (vintagedata[parameters["series_code_col"]].isin(list(impact_assessment["Series ID"]))) &\
@@ -956,7 +957,7 @@ def collect_results(variable, vintagedata, ts, parameters, s1, s2, s3):
 
     # Melt wide DataFrame to long format
     df_long = df.sort_index().loc[
-        reference_date-relativedelta(months=6):reference_date
+        reference_date-relativedelta(months=12):reference_date
         ].reset_index().melt(
             id_vars=[parameters["ref_date_col"]], var_name='Variable Code', value_name='Variable Value'
             )
