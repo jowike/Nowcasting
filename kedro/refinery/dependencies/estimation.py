@@ -66,7 +66,7 @@ def ml_fit_predict(ds, ref_date_col, model, series_name, reference_date, n_perio
             ]
         )
 
-    return coef_, yhat, T, X_test.squeeze(axis=0)
+    return coef_, yhat, T, X_test.squeeze(axis=0), len(T)
 
 
 def arima_fit_predict(ds, ref_date_col, series_name, reference_date, n_periods):
@@ -316,9 +316,9 @@ def estimate_automl(
     }
 
     models_results = {}
-
+    n_est = 0
     for model_name, model in models.items():
-        coef_, pred, T, values = ml_fit_predict(
+        coef_, pred, T, values, n_iter= ml_fit_predict(
             ds=ds,
             ref_date_col=ref_date_col,
             model=model,
@@ -334,6 +334,7 @@ def estimate_automl(
             "coef_": coef_,
             "values": values,
         }
+        n_est = n_est + n_iter
     # Ensure all predictions align with the actuals index
     y_actual = ds.set_index(ref_date_col).loc[T].sort_index()[series_name]
 
@@ -348,6 +349,7 @@ def estimate_automl(
         actual=y_actual.drop(reference_date),
         predicted=models_results[model_name]["backcast"],
     )
+    best_model_res["n_est"] = n_est
 
     return best_model_res
 
