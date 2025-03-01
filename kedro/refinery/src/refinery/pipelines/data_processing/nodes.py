@@ -1,7 +1,7 @@
 import sys
 
 sys.path.append(
-    "/Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/dependencies/"
+    "C:\\Users\\elzbi\\OneDrive\\Dokumenty\\GitHub\\Nowcasting\\kedro\\refinery\\dependencies"
 )
 
 import pandas as pd

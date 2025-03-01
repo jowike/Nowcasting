@@ -39,7 +39,7 @@ def summarize(X, Time, Spec):
             format_date = '%b %Y'
             frequency = 'Monthly'
         elif freq == 'q':
-            format_date = 'Q%q %Y'
+            # format_date = 'Q%q %Y'
             frequency = 'Quarterly'
 
         units = Spec['units'][i]
@@ -63,9 +63,21 @@ def summarize(X, Time, Spec):
         if num_obs:
             t_obs_start = np.where(t_obs)[0][0]
             t_obs_end = np.where(t_obs)[0][-1]
-            obs_date_start = pd.to_datetime(Time[t_obs_start]).strftime(format_date)
-            obs_date_end = pd.to_datetime(Time[t_obs_end]).strftime(format_date)
-
+            # obs_date_start = pd.to_datetime(Time[t_obs_start]).strftime(format_date)
+            # obs_date_end = pd.to_datetime(Time[t_obs_end]).strftime(format_date)
+            dt_start = pd.to_datetime(Time[t_obs_start])
+            dt_end = pd.to_datetime(Time[t_obs_end])
+            
+            if freq == 'm':
+                obs_date_start = dt_start.strftime(format_date)
+                obs_date_end = dt_end.strftime(format_date)
+            elif freq == 'q':
+                # Manually compute the quarter
+                quarter_start = (dt_start.month - 1) // 3 + 1
+                quarter_end = (dt_end.month - 1) // 3 + 1
+                obs_date_start = f"Q{quarter_start} {dt_start.year}"
+                obs_date_end = f"Q{quarter_end} {dt_end.year}"
+                
             y = X[t_obs, i]
             d = Time[t_obs]
             mean_series = np.nanmean(y)

@@ -7,7 +7,7 @@
 
 
 spec_options:
-  filepath: /Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/data/0_source/Spec_US_example.xlsx
+  filepath: C:\\Users\\elzbi\\OneDrive\\Dokumenty\\GitHub\\Nowcasting\\kedro\\refinery\\data\\0_source\\Spec_US_example.xlsx
   country: US
 
 options:
@@ -30,8 +30,8 @@ options:
     - Monthly, End of Period
   mifs_method: MRMR
   backcasting_period: 72
-  model_output_directory: /Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/data/07_model_output/
-  reporting_directory: /Users/ejowik001/Desktop/Github/Nowcasting/kedro/refinery/data/08_reporting/
+  model_output_directory: C:\\Users\\elzbi\\OneDrive\\Dokumenty\\GitHub\\Nowcasting\\kedro\\refinery\\data\\07_model_output\\
+  reporting_directory: C:\\Users\\elzbi\\OneDrive\\Dokumenty\\GitHub\\Nowcasting\\kedro\\refinery\\data\\08_reporting\\
   ar_report_filename: ar.xlsx
   var_report_filename: var.xlsx
   ml_report_filename: ml.xlsx
