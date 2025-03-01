@@ -30,4 +30,4 @@ def mtsfs(ds: pd.DataFrame, series_name: str, method: str):
     )
     to_write = pd.merge(X_support, y, left_index=True, right_index=True, how="right")
 
-    return to_write.reset_index()
+    return to_write

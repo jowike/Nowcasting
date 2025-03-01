@@ -60,7 +60,7 @@ ar_estimation_results:
   type: kedro_datasets.text.TextDataset
   filepath: C:\\Users\\elzbi\\OneDrive\\Dokumenty\\GitHub\\Nowcasting\\kedro\\refinery\\data\\07_model_output\\ar_node_completion_logs.txt
 
-vr_estimation_results:
+var_estimation_results:
   type: kedro_datasets.text.TextDataset
   filepath: C:\\Users\\elzbi\\OneDrive\\Dokumenty\\GitHub\\Nowcasting\\kedro\\refinery\\data\\07_model_output\\var_node_completion_logs.txt
 

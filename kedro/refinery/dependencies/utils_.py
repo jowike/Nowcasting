@@ -67,11 +67,11 @@ def cast_spec_to_dict(df):
 
     # Fields to extract from the Excel file
     field_names = ["seriesid", "seriesname", "frequency", "transformation", "units", "category", "model"]
+    # Extract required fields and ensure they exist
     for field in field_names:
-        if field in raw_data.columns:
-            spec[field] = raw_data[field].tolist()
-        else:
+        if field not in raw_data.columns:
             raise ValueError(f"{field} column missing from model specification.")
+        spec[field] = raw_data[field].tolist()    
 
     return spec
 
