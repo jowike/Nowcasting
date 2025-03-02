@@ -8,7 +8,7 @@
 
 revision_history:
   type: pandas.CSVDataset
-  filepath: data/0_source/00_extract_vintagedata.csv
+  filepath: C:\\Users\\elzbi\\OneDrive\\Dokumenty\\GitHub\\Nowcasting\\kedro\\refinery\\data\\0_source\\00_extract_vintagedata.csv
   load_args:
     decimal: ","
 
