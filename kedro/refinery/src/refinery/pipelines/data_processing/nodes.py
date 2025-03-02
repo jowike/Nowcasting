@@ -368,6 +368,7 @@ def apply_series_selection(
         to_write = mtsfs(
             ds=ds, series_name=parameters["y_code"], method=parameters["mifs_method"]
         )
+    to_write = to_write.dropna(axis=1, how="all")
     return to_write.reset_index()
 
 
